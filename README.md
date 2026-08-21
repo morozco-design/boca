@@ -56,9 +56,35 @@ con la Netlify CLI.
    nuevos a ese mismo repositorio (reemplazando los viejos) → Netlify
    redespliega solo.
 
-**Netlify Blobs** no necesita ninguna cuenta ni configuración aparte — viene
-incluido con cualquier sitio de Netlify, siempre que el deploy pase por un
-build real (por eso el paso de Git de arriba es necesario).
+**Netlify Blobs** en general no necesita ninguna cuenta ni configuración
+aparte — viene incluido con cualquier sitio de Netlify. Pero el mecanismo
+automático que usa Netlify para "avisarle" a la función cuál es su Blobs
+correspondiente (a través del evento que recibe la función) puede fallar en
+algunos sitios sin motivo claro — si después de desplegar por Git seguís
+viendo el error **"The environment has not been configured to use Netlify
+Blobs"**, hace falta el paso manual de abajo.
+
+### 1.1. Si el error de Blobs persiste: configurarlo a mano
+
+Esto evita depender del mecanismo automático y funciona siempre:
+
+1. **Conseguí el Project ID de tu sitio**: en Netlify, andá a **Project
+   configuration → General → Project information**, y copiá el valor de
+   **Project ID**.
+2. **Creá un Personal Access Token**: andá a
+   [app.netlify.com/user/applications#personal-access-tokens](https://app.netlify.com/user/applications#personal-access-tokens),
+   tocá **New access token**, ponele un nombre (ej. "pase-unico-blobs"),
+   elegí una fecha de expiración, y tocá **Generate token**. Copiá el token
+   que te muestra — **es la única vez que lo vas a poder ver**.
+3. En tu sitio: **Project configuration → Environment variables**, agregá
+   dos variables:
+   - `BLOBS_SITE_ID` con el Project ID que copiaste en el paso 1.
+   - `BLOBS_TOKEN` con el token que copiaste en el paso 2.
+4. Volvé a desplegar (**Deploys → Trigger deploy**) para que las funciones
+   tomen las variables nuevas.
+
+Con esas dos variables configuradas, las funciones se conectan a Netlify
+Blobs directamente, sin depender del mecanismo automático que venía fallando.
 
 ## 2. Usar el sistema
 

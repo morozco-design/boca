@@ -14,20 +14,24 @@ exports.handler = async (event) => {
   }
   initFromEvent(event);
 
-  const { state } = await readState();
-  const tickets = state.tickets || [];
-  const stats = {
-    total: tickets.length,
-    disponible: tickets.filter((t) => t.status === 'disponible').length,
-    emitido: tickets.filter((t) => t.status === 'emitido').length,
-    usado: tickets.filter((t) => t.status === 'usado').length,
-  };
+  try {
+    const { state } = await readState();
+    const tickets = state.tickets || [];
+    const stats = {
+      total: tickets.length,
+      disponible: tickets.filter((t) => t.status === 'disponible').length,
+      emitido: tickets.filter((t) => t.status === 'emitido').length,
+      usado: tickets.filter((t) => t.status === 'usado').length,
+    };
 
-  return json(200, {
-    ok: true,
-    eventName: state.eventName || '',
-    tickets,
-    stats,
-    updatedAt: state.updatedAt || null,
-  });
+    return json(200, {
+      ok: true,
+      eventName: state.eventName || '',
+      tickets,
+      stats,
+      updatedAt: state.updatedAt || null,
+    });
+  } catch (err) {
+    return json(500, { ok: false, error: 'server_error', message: String((err && err.message) || err) });
+  }
 };
