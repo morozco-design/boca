@@ -1,0 +1,115 @@
+# Pase Único — backend real (Netlify)
+
+Sistema de emisión y validación de entradas por código QR, con servidor real:
+la lista de códigos vive en **Netlify Blobs** (persistente, compartida entre
+todos los dispositivos), y la página de escaneo corre en un dominio normal
+`https://tu-sitio.netlify.app`, así que la cámara del celular funciona sin
+las restricciones que tienen los artifacts de Claude.
+
+## Qué incluye
+
+- `public/index.html` — página **pública** de escaneo (la abren los que
+  controlan la entrada; no pide clave).
+- `public/panel.html` — panel de **administración**: generar el lote,
+  entregar códigos, cancelar entregas, buscar e imprimir. **Tampoco pide
+  clave** — cualquiera con el link puede usarlo (ver la sección de
+  Seguridad más abajo).
+- `netlify/functions/` — 5 funciones serverless: `state`, `generate`,
+  `dispense`, `cancel` y `validate` (la que usa la página de escaneo).
+  Ninguna requiere autenticación.
+- `test/` — pruebas automáticas de la lógica (no hace falta correrlas, pero
+  quedan documentadas; ver más abajo).
+
+## 1. Desplegar en Netlify
+
+**Importante:** este proyecto tiene funciones de servidor con una dependencia
+(`@netlify/blobs`) que hay que instalar durante un build. **El drag-and-drop
+manual de una carpeta/zip en la página de Deploys NO sirve para esto** —
+Netlify no corre ningún build en ese modo, así que la dependencia nunca se
+instala y las funciones fallan. Hay que desplegar por Git (recomendado) o
+con la Netlify CLI.
+
+### Opción recomendada: conectar un repositorio de GitHub
+
+1. Si no tenés cuenta, creá una en [github.com/join](https://github.com/join).
+2. Creá un repositorio nuevo y vacío en [github.com/new](https://github.com/new)
+   (podés dejarlo privado, y no hace falta tildar "Add a README").
+3. En la página del repo recién creado va a aparecer un link que dice
+   **"uploading an existing file"** — hacé click ahí.
+4. Descomprimí el .zip de este proyecto en tu computadora, y arrastrá **todo
+   el contenido** de la carpeta (las carpetas `netlify/`, `public/`, `test/`,
+   y los archivos `netlify.toml`, `package.json`, `package-lock.json`,
+   `README.md`, `.gitignore`) al recuadro de GitHub. Los navegadores modernos
+   soportan arrastrar carpetas enteras manteniendo su estructura.
+5. Abajo de todo, tocá **"Commit changes"** para subirlo a la rama principal.
+6. Si ya tenés un sitio creado en Netlify (el que hiciste por drag-and-drop):
+   entrá a ese sitio → **Project configuration → Build & deploy →
+   Continuous deployment → Repository** → **Link repository** → elegí
+   GitHub → seleccioná el repositorio que acabás de crear. Esto mantiene la
+   misma URL que ya tenías.
+   - Si preferís empezar de cero, también podés crear un sitio nuevo con
+     **"Add new site" → "Import an existing project"** y elegir ese repo.
+7. Netlify va a detectar el `netlify.toml` (funciones en `netlify/functions`,
+   sitio en `public`) y esta vez sí va a correr `npm install` como parte del
+   build antes de desplegar.
+8. A partir de acá, cualquier actualización futura es: subir los archivos
+   nuevos a ese mismo repositorio (reemplazando los viejos) → Netlify
+   redespliega solo.
+
+**Netlify Blobs** no necesita ninguna cuenta ni configuración aparte — viene
+incluido con cualquier sitio de Netlify, siempre que el deploy pase por un
+build real (por eso el paso de Git de arriba es necesario).
+
+## 2. Usar el sistema
+
+- **Generar y entregar entradas**: entrá a `https://tu-sitio.netlify.app/panel.html`
+  (ya carga directo, sin pedir clave), generá el lote (por ejemplo 300
+  códigos) y entregá uno por uno con el botón "Entregar el próximo
+  código" — ahí podés anotar a quién se lo diste. Cada código entregado
+  queda con su QR para mostrar o imprimir.
+- **Escanear en la puerta**: quien controla el ingreso abre
+  `https://tu-sitio.netlify.app/` (o `/index.html`) en el navegador del
+  celular — **esta página es pública, no necesita la clave** — y toca
+  "Activar cámara". Cada código habilita el ingreso una única vez; si se
+  intenta usar de nuevo, se rechaza.
+- **Cancelar una entrega** (si alguien no retiró la entrada, por ejemplo):
+  en el panel, buscá el código y tocá "Cancelar entrega" — vuelve al pool
+  de disponibles.
+- Podés compartir el link del panel solo con el equipo de organización, y el
+  link de escaneo con cualquiera que controle el ingreso — no hace falta
+  que tengan cuenta de nada.
+
+## 3. Seguridad
+
+- **El panel (`/panel.html`) no pide clave.** Cualquiera que tenga ese link
+  puede generar lotes nuevos, entregar códigos y cancelar entregas — a
+  diferencia de la página pública de escaneo, el panel sí puede ver y
+  modificar todos los tickets. En la práctica esto significa: no compartas
+  el link del panel más que con quien organiza el evento, igual que no
+  compartirías la planilla de invitados.
+  - Si en algún momento querés protegerlo sin tocar código, Netlify tiene una
+    función de **Password protection** a nivel de sitio o de ruta (en
+    Project configuration → Visitor access, disponible en algunos planes)
+    que podés aplicar sólo sobre `/panel.html`, sin depender de variables de
+    entorno.
+- Los códigos QR ya generados **no** se exponen nunca completos por la
+  página pública de escaneo: `validate` sólo responde sobre el código
+  puntual que se escanea, nunca devuelve la lista completa.
+- Las escrituras en Netlify Blobs usan control de concurrencia optimista
+  (ETags), así que si dos personas escanean el mismo código casi al mismo
+  tiempo, sólo una de las dos lo valida — la otra recibe "código ya
+  utilizado", sin condiciones de carrera.
+
+## 4. Pruebas incluidas (opcional)
+
+Si querés correr las pruebas automáticas de la lógica del servidor (no hace
+falta para desplegar, ya están verificadas):
+
+```bash
+npm install
+npm test
+```
+
+Esto corre 14 pruebas contra una versión simulada de Netlify Blobs en
+memoria (incluye dos pruebas de concurrencia: varias entregas o escaneos
+simultáneos compitiendo por el mismo código).

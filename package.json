@@ -1,0 +1,12 @@
+{
+  "name": "pase-unico",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Emisor y validador de códigos QR de entrada, con Netlify Functions + Netlify Blobs.",
+  "scripts": {
+    "test": "node test/run-tests.js"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^8.2.0"
+  }
+}

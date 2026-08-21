@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pase Único — Control de acceso</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Sora:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <h1>Pase Único</h1>
+    <span class="tag">control de acceso</span>
+  </div>
+
+  <div class="card camera-card">
+    <h2>Escanear entrada</h2>
+    <div class="viewfinder">
+      <video id="camera-video" playsinline muted autoplay></video>
+      <div class="frame"></div>
+    </div>
+    <canvas id="scan-canvas" hidden></canvas>
+    <button class="btn" id="btn-start-camera" type="button">Activar cámara</button>
+    <p class="hint" id="camera-hint" hidden></p>
+  </div>
+
+  <div id="scan-status" class="scan-status scan-status--unknown" hidden>
+    <div class="headline" id="scan-headline">—</div>
+    <div class="sub" id="scan-sub"></div>
+  </div>
+
+  <p class="hint">Apuntá la cámara al código QR de la entrada. Cada código habilita el ingreso una única vez.</p>
+</div>
+
+<div id="toast-region" class="toast-region"></div>
+
+<script src="/vendor/jsQR.min.js"></script>
+<script src="/assets/scanner.js"></script>
+</body>
+</html>

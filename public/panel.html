@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pase Único — Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Sora:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+
+<div id="panel-view" class="wrap">
+  <div class="brand">
+    <h1>Pase Único</h1>
+    <span class="tag">panel de administración</span>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat"><span class="n" id="stat-total">0</span><span class="l">Total</span></div>
+    <div class="stat"><span class="n" id="stat-disponible">0</span><span class="l">Disponibles</span></div>
+    <div class="stat"><span class="n" id="stat-emitido">0</span><span class="l">Entregados</span></div>
+  </div>
+
+  <div id="sold-out-banner" class="banner banner-warn" hidden>No quedan códigos disponibles en el pool.</div>
+
+  <div class="card">
+    <h2>Generar lote</h2>
+    <label for="input-event-name">Nombre del evento</label>
+    <input type="text" id="input-event-name" placeholder="Ej: Fiesta de fin de año">
+    <label for="input-quantity">Cantidad de códigos</label>
+    <input type="number" id="input-quantity" min="1" max="5000" value="300">
+    <button class="btn" id="btn-generate" type="button">Generar lote</button>
+    <p class="hint" id="generate-warning" hidden style="color:var(--bad);"></p>
+  </div>
+
+  <div class="card">
+    <h2>Entregar código</h2>
+    <label for="input-recipient">¿A quién se le entrega? (opcional)</label>
+    <input type="text" id="input-recipient" placeholder="Nombre de la persona">
+    <button class="btn" id="btn-dispense" type="button">Entregar el próximo código</button>
+  </div>
+
+  <div class="card">
+    <h2>Lote de códigos</h2>
+    <div class="search-row">
+      <input type="text" id="search-code" placeholder="Buscar por código o nombre...">
+    </div>
+    <div class="switch-row">
+      <button class="btn btn-secondary btn-small" id="btn-refresh" type="button">Actualizar</button>
+      <button class="btn btn-secondary btn-small" id="btn-print-all" type="button">Imprimir entregados</button>
+    </div>
+    <div id="pool-view"></div>
+    <p class="hint" id="empty-pool-hint" hidden>Todavía no generaste ningún código.</p>
+  </div>
+</div>
+
+<div id="dispense-modal" class="modal-overlay" hidden>
+  <div class="modal-card">
+    <h3>Código entregado</h3>
+    <div class="qr-holder"><canvas id="modal-qr-holder" width="220" height="220"></canvas></div>
+    <div class="code-text" id="modal-code-text">—</div>
+    <div class="recipient-text" id="modal-recipient-text"></div>
+    <button class="btn" id="btn-close-modal" type="button">Cerrar</button>
+  </div>
+</div>
+
+<div id="confirm-modal" class="modal-overlay" hidden>
+  <div class="modal-card">
+    <h3 id="confirm-title">Confirmar</h3>
+    <p id="confirm-message"></p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="btn-confirm-cancel" type="button">Cancelar</button>
+      <button class="btn btn-danger" id="btn-confirm-ok" type="button">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<div id="print-area" hidden></div>
+
+<div id="toast-region" class="toast-region"></div>
+
+<script src="/vendor/qrcode.min.js"></script>
+<script src="/assets/panel.js"></script>
+</body>
+</html>
