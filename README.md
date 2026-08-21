@@ -10,15 +10,37 @@ las restricciones que tienen los artifacts de Claude.
 
 - `public/index.html` — página **pública** de escaneo (la abren los que
   controlan la entrada; no pide clave).
-- `public/panel.html` — panel de **administración**: generar el lote,
+- `public/panel.html` — panel de **administración**: soporta **varios
+  eventos a la vez** (un selector arriba de todo permite elegir entre ellos,
+  crear uno nuevo o eliminarlo), y para el evento elegido: generar el lote,
   entregar códigos, cancelar entregas, buscar e imprimir. **Tampoco pide
   clave** — cualquiera con el link puede usarlo (ver la sección de
   Seguridad más abajo).
-- `netlify/functions/` — 5 funciones serverless: `state`, `generate`,
-  `dispense`, `cancel` y `validate` (la que usa la página de escaneo).
-  Ninguna requiere autenticación.
+- `netlify/functions/` — 6 funciones serverless: `state`, `generate`,
+  `dispense`, `cancel`, `delete-event` y `validate` (la que usa la página de
+  escaneo). Ninguna requiere autenticación.
 - `test/` — pruebas automáticas de la lógica (no hace falta correrlas, pero
   quedan documentadas; ver más abajo).
+
+## Múltiples eventos
+
+El sistema puede manejar varios eventos en simultáneo (por ejemplo, dos
+fiestas distintas), cada uno con su propio pool de códigos, totalmente
+independiente entre sí:
+
+- En `/panel.html`, arriba de todo hay un selector **"Evento actual"** con
+  todos los eventos creados, más una opción **"+ Nuevo evento…"**.
+- Al elegir **"+ Nuevo evento…"**, la sección "Generar lote" pide un nombre
+  y una cantidad, y crea el evento con ese primer lote de códigos.
+- Al elegir un evento existente, todo el panel (entregar código, cancelar,
+  buscar, stats) pasa a operar sobre ese evento — y "Generar lote" pasa a
+  sumarle más códigos (sin tocar los ya entregados o usados).
+- El botón **"Eliminar este evento"** borra el evento y todos sus códigos
+  de forma permanente (pide confirmación antes). Los códigos de un evento
+  eliminado dejan de ser válidos en el escáner.
+- Cada código QR es único **entre todos los eventos**, así que la página
+  pública de escaneo (`/index.html`) no necesita saber de qué evento es un
+  código — lo identifica automáticamente al escanearlo.
 
 ## 1. Desplegar en Netlify
 
@@ -147,6 +169,8 @@ npm install
 npm test
 ```
 
-Esto corre 14 pruebas contra una versión simulada de Netlify Blobs en
-memoria (incluye dos pruebas de concurrencia: varias entregas o escaneos
+Esto corre 28 pruebas contra una versión simulada de Netlify Blobs en
+memoria (incluye pruebas de aislamiento entre eventos, borrado de eventos,
+migración automática de un estado guardado con la versión anterior de un
+solo evento, y dos pruebas de concurrencia: varias entregas o escaneos
 simultáneos compitiendo por el mismo código).
