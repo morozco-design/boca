@@ -2,7 +2,7 @@
 
 const { json, noContent, parseBody } = require('./_lib/http');
 const { isAdminAuthorized } = require('./_lib/auth');
-const { updateState, MutationRejected, initFromEvent } = require('./_lib/store');
+const { updateState, MutationRejected, initFromEvent, blobsDebugInfo } = require('./_lib/store');
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return noContent();
@@ -50,6 +50,6 @@ exports.handler = async (event) => {
       const codeMap = { not_found: 404, already_used: 409, not_issued: 409 };
       return json(codeMap[err.code] || 400, { ok: false, error: err.code, message: err.message });
     }
-    return json(500, { ok: false, error: 'server_error', message: String((err && err.message) || err) });
+    return json(500, { ok: false, error: 'server_error', message: String((err && err.message) || err), debug: blobsDebugInfo() });
   }
 };

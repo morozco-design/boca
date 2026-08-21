@@ -2,7 +2,7 @@
 
 const { json, noContent, parseBody } = require('./_lib/http');
 const { isAdminAuthorized } = require('./_lib/auth');
-const { updateState, initFromEvent } = require('./_lib/store');
+const { updateState, initFromEvent, blobsDebugInfo } = require('./_lib/store');
 const { generateUniqueCodes } = require('./_lib/codes');
 
 const MAX_QUANTITY = 5000;
@@ -57,6 +57,6 @@ exports.handler = async (event) => {
 
     return json(200, { ok: true, eventName: nextState.eventName, stats, tickets: nextState.tickets });
   } catch (err) {
-    return json(500, { ok: false, error: 'server_error', message: String((err && err.message) || err) });
+    return json(500, { ok: false, error: 'server_error', message: String((err && err.message) || err), debug: blobsDebugInfo() });
   }
 };

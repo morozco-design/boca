@@ -51,21 +51,24 @@ function emptyState() {
 //     General → Project information → Project ID).
 //   - BLOBS_TOKEN: a Netlify Personal Access Token (User settings →
 //     Applications → Personal access tokens → New access token).
+// Whether BLOBS_SITE_ID/BLOBS_TOKEN are visible to this function at
+// runtime — NEVER the values themselves, just booleans. Handlers attach
+// this to their error responses (see http.js's errorJson) so it shows up
+// directly in the browser's Network tab, instead of depending on Netlify's
+// real-time function log (which has proven unreliable to read in practice).
+function blobsDebugInfo() {
+  return {
+    hasSiteID: Boolean(process.env.BLOBS_SITE_ID),
+    hasToken: Boolean(process.env.BLOBS_TOKEN),
+  };
+}
+
 function manualBlobsOptions() {
   const siteID = process.env.BLOBS_SITE_ID;
   const token = process.env.BLOBS_TOKEN;
   if (siteID && token) {
     return { siteID, token };
   }
-  // Logged (never the token itself) so this is visible in Netlify's
-  // real-time function log — if this fires, the env vars aren't reaching
-  // the function at runtime (commonly a missing "Functions" scope on the
-  // variable in Project configuration → Environment variables), even
-  // though they're saved on the site.
-  console.error('[pase-unico] BLOBS_SITE_ID/BLOBS_TOKEN no disponibles en runtime:', {
-    hasSiteID: Boolean(siteID),
-    hasToken: Boolean(token),
-  });
   return {};
 }
 
@@ -140,4 +143,4 @@ async function updateState(mutator) {
   throw lastErr || new Error('No se pudo guardar el estado (demasiados conflictos).');
 }
 
-module.exports = { readState, updateState, emptyState, MutationRejected, initFromEvent, STORE_NAME, STATE_KEY };
+module.exports = { readState, updateState, emptyState, MutationRejected, initFromEvent, blobsDebugInfo, STORE_NAME, STATE_KEY };

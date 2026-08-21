@@ -1,7 +1,7 @@
 'use strict';
 
 const { json, noContent, parseBody } = require('./_lib/http');
-const { updateState, MutationRejected, initFromEvent } = require('./_lib/store');
+const { updateState, MutationRejected, initFromEvent, blobsDebugInfo } = require('./_lib/store');
 
 const QR_PREFIX = 'PU:';
 
@@ -57,7 +57,7 @@ exports.handler = async (event) => {
     });
   } catch (err) {
     if (!(err instanceof MutationRejected)) {
-      return json(500, { ok: false, error: 'server_error', message: String((err && err.message) || err) });
+      return json(500, { ok: false, error: 'server_error', message: String((err && err.message) || err), debug: blobsDebugInfo() });
     }
     // else: outcome was already set above before the throw, fall through.
   }

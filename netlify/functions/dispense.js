@@ -2,7 +2,7 @@
 
 const { json, noContent, parseBody } = require('./_lib/http');
 const { isAdminAuthorized } = require('./_lib/auth');
-const { updateState, MutationRejected, initFromEvent } = require('./_lib/store');
+const { updateState, MutationRejected, initFromEvent, blobsDebugInfo } = require('./_lib/store');
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return noContent();
@@ -46,6 +46,6 @@ exports.handler = async (event) => {
     if (err instanceof MutationRejected && err.code === 'pool_empty') {
       return json(409, { ok: false, error: 'pool_empty' });
     }
-    return json(500, { ok: false, error: 'server_error', message: String((err && err.message) || err) });
+    return json(500, { ok: false, error: 'server_error', message: String((err && err.message) || err), debug: blobsDebugInfo() });
   }
 };

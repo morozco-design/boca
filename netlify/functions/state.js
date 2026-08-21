@@ -2,7 +2,7 @@
 
 const { json, noContent } = require('./_lib/http');
 const { isAdminAuthorized } = require('./_lib/auth');
-const { readState, initFromEvent } = require('./_lib/store');
+const { readState, initFromEvent, blobsDebugInfo } = require('./_lib/store');
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return noContent();
@@ -32,6 +32,6 @@ exports.handler = async (event) => {
       updatedAt: state.updatedAt || null,
     });
   } catch (err) {
-    return json(500, { ok: false, error: 'server_error', message: String((err && err.message) || err) });
+    return json(500, { ok: false, error: 'server_error', message: String((err && err.message) || err), debug: blobsDebugInfo() });
   }
 };
