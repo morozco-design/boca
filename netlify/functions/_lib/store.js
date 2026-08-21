@@ -57,6 +57,15 @@ function manualBlobsOptions() {
   if (siteID && token) {
     return { siteID, token };
   }
+  // Logged (never the token itself) so this is visible in Netlify's
+  // real-time function log — if this fires, the env vars aren't reaching
+  // the function at runtime (commonly a missing "Functions" scope on the
+  // variable in Project configuration → Environment variables), even
+  // though they're saved on the site.
+  console.error('[pase-unico] BLOBS_SITE_ID/BLOBS_TOKEN no disponibles en runtime:', {
+    hasSiteID: Boolean(siteID),
+    hasToken: Boolean(token),
+  });
   return {};
 }
 
