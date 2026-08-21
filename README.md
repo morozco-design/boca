@@ -56,6 +56,17 @@ con la Netlify CLI.
    nuevos a ese mismo repositorio (reemplazando los viejos) → Netlify
    redespliega solo.
 
+**Nota sobre la causa real de los errores de Blobs que fuimos resolviendo:**
+el `package.json` de una versión anterior de este proyecto tenía fijada la
+versión `^8.2.0` de `@netlify/blobs` por error (no coincidía con la versión
+realmente instalada y probada, la `11.0.1`). Eso hacía que Netlify instalara
+una versión vieja del paquete —con un comportamiento interno distinto al que
+estaba probado y verificado acá— cada vez que desplegaba, sin importar qué
+tan bien estuviera el resto del código. Ya está corregido: `package.json` y
+`package-lock.json` ahora fijan la `11.0.1` (la misma que corren las
+pruebas locales), así que el próximo deploy va a instalar la versión
+correcta.
+
 **Netlify Blobs** en general no necesita ninguna cuenta ni configuración
 aparte — viene incluido con cualquier sitio de Netlify. Pero el mecanismo
 automático que usa Netlify para "avisarle" a la función cuál es su Blobs
