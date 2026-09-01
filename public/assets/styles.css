@@ -117,7 +117,7 @@ label {
   color: var(--ink-soft);
   margin-bottom: 6px;
 }
-input[type="text"], input[type="number"], input[type="password"] {
+input[type="text"], input[type="number"], input[type="password"], select {
   width: 100%;
   font-family: var(--font-body);
   font-size: 1rem;
@@ -128,7 +128,9 @@ input[type="text"], input[type="number"], input[type="password"] {
   color: var(--ink);
   margin-bottom: 12px;
 }
-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+select { appearance: auto; }
+#btn-delete-event { margin-top: -2px; }
 
 .btn {
   display: inline-flex;

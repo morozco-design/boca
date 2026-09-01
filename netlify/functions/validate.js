@@ -33,8 +33,12 @@ exports.handler = async (event) => {
 
   try {
     await updateState((state) => {
-      const tickets = state.tickets || [];
-      const ticket = tickets.find((t) => t.code === code);
+      const events = state.events || [];
+      let ticket = null;
+      for (const ev of events) {
+        const t = (ev.tickets || []).find((tt) => tt.code === code);
+        if (t) { ticket = t; break; }
+      }
 
       if (!ticket) {
         outcome = { ok: false, reason: 'not_found' };

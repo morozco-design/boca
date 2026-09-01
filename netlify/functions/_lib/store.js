@@ -1,10 +1,16 @@
 'use strict';
 
+const crypto = require('crypto');
 const { getStore, connectLambda } = require('@netlify/blobs');
 
 const STORE_NAME = 'pase-unico';
 const STATE_KEY = 'state';
 const MAX_RETRIES = 8;
+
+function randomId() {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  return crypto.randomBytes(16).toString('hex');
+}
 
 // These functions use the classic "Lambda compatibility mode" handler style
 // (exports.handler = async (event) => {...}), and for that style Netlify
@@ -35,10 +41,56 @@ function initFromEvent(event) {
 
 function emptyState() {
   return {
-    eventName: '',
-    tickets: [],
+    events: [],
     updatedAt: null,
   };
+}
+
+// The store used to hold a single event ({eventName, tickets}). Now it holds
+// several ({events: [{id, name, tickets, createdAt}]}). Any state blob
+// written before this change is transparently upgraded into the new shape
+// the first time it's read, so existing deployments don't lose their pool.
+function migrateState(raw) {
+  if (!raw || typeof raw !== 'object') return emptyState();
+  if (Array.isArray(raw.events)) return raw;
+  if (Array.isArray(raw.tickets)) {
+    return {
+      events: [
+        {
+          id: randomId(),
+          name: raw.eventName || 'Evento',
+          tickets: raw.tickets,
+          createdAt: raw.updatedAt || new Date().toISOString(),
+        },
+      ],
+      updatedAt: raw.updatedAt || null,
+    };
+  }
+  return emptyState();
+}
+
+function statsFor(tickets) {
+  const list = tickets || [];
+  return {
+    total: list.length,
+    disponible: list.filter((t) => t.status === 'disponible').length,
+    emitido: list.filter((t) => t.status === 'emitido').length,
+    usado: list.filter((t) => t.status === 'usado').length,
+  };
+}
+
+// Summary shape used for the event picker (no ticket codes/recipients).
+function eventSummaries(state) {
+  return (state.events || []).map((ev) => ({
+    id: ev.id,
+    name: ev.name,
+    createdAt: ev.createdAt || null,
+    stats: statsFor(ev.tickets),
+  }));
+}
+
+function findEvent(state, eventId) {
+  return (state.events || []).find((ev) => ev.id === eventId) || null;
 }
 
 // The automatic detection (connectLambda above, relying on Netlify's
@@ -94,7 +146,7 @@ async function readState() {
   if (!result || result.data == null) {
     return { state: emptyState(), etag: undefined };
   }
-  return { state: result.data, etag: result.etag };
+  return { state: migrateState(result.data), etag: result.etag };
 }
 
 // A logic-level rejection thrown by a mutator (e.g. "this code was already
@@ -143,4 +195,17 @@ async function updateState(mutator) {
   throw lastErr || new Error('No se pudo guardar el estado (demasiados conflictos).');
 }
 
-module.exports = { readState, updateState, emptyState, MutationRejected, initFromEvent, blobsDebugInfo, STORE_NAME, STATE_KEY };
+module.exports = {
+  readState,
+  updateState,
+  emptyState,
+  MutationRejected,
+  initFromEvent,
+  blobsDebugInfo,
+  randomId,
+  statsFor,
+  eventSummaries,
+  findEvent,
+  STORE_NAME,
+  STATE_KEY,
+};

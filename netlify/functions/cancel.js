@@ -2,7 +2,7 @@
 
 const { json, noContent, parseBody } = require('./_lib/http');
 const { isAdminAuthorized } = require('./_lib/auth');
-const { updateState, MutationRejected, initFromEvent, blobsDebugInfo } = require('./_lib/store');
+const { updateState, MutationRejected, initFromEvent, blobsDebugInfo, statsFor } = require('./_lib/store');
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return noContent();
@@ -18,10 +18,20 @@ exports.handler = async (event) => {
   const code = typeof body.code === 'string' ? body.code.trim().toUpperCase() : '';
   if (!code) return json(400, { ok: false, error: 'missing_code' });
 
+  let foundEventId = null;
+
   try {
     const nextState = await updateState((state) => {
-      const tickets = state.tickets || [];
-      const ticket = tickets.find((t) => t.code === code);
+      const events = state.events || [];
+      let ticket = null;
+      for (const ev of events) {
+        const t = (ev.tickets || []).find((tt) => tt.code === code);
+        if (t) {
+          ticket = t;
+          foundEventId = ev.id;
+          break;
+        }
+      }
       if (!ticket) {
         throw new MutationRejected('not_found', 'Código no encontrado.');
       }
@@ -37,14 +47,8 @@ exports.handler = async (event) => {
       return state;
     });
 
-    const stats = {
-      total: nextState.tickets.length,
-      disponible: nextState.tickets.filter((t) => t.status === 'disponible').length,
-      emitido: nextState.tickets.filter((t) => t.status === 'emitido').length,
-      usado: nextState.tickets.filter((t) => t.status === 'usado').length,
-    };
-
-    return json(200, { ok: true, stats, tickets: nextState.tickets });
+    const ev = (nextState.events || []).find((e) => e.id === foundEventId);
+    return json(200, { ok: true, eventId: foundEventId, stats: statsFor(ev.tickets), tickets: ev.tickets });
   } catch (err) {
     if (err instanceof MutationRejected) {
       const codeMap = { not_found: 404, already_used: 409, not_issued: 409 };

@@ -2,8 +2,10 @@
 
 const { json, noContent } = require('./_lib/http');
 const { isAdminAuthorized } = require('./_lib/auth');
-const { readState, initFromEvent, blobsDebugInfo } = require('./_lib/store');
+const { readState, initFromEvent, blobsDebugInfo, statsFor, eventSummaries, findEvent } = require('./_lib/store');
 
+// GET /state              -> { ok, events: [summary...], updatedAt }
+// GET /state?eventId=xxx  -> { ok, events: [summary...], event: {id,name,tickets,stats,createdAt}, updatedAt }
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return noContent();
   if (event.httpMethod !== 'GET') {
@@ -14,23 +16,27 @@ exports.handler = async (event) => {
   }
   initFromEvent(event);
 
+  const eventId = (event.queryStringParameters && event.queryStringParameters.eventId) || '';
+
   try {
     const { state } = await readState();
-    const tickets = state.tickets || [];
-    const stats = {
-      total: tickets.length,
-      disponible: tickets.filter((t) => t.status === 'disponible').length,
-      emitido: tickets.filter((t) => t.status === 'emitido').length,
-      usado: tickets.filter((t) => t.status === 'usado').length,
-    };
+    const events = eventSummaries(state);
 
-    return json(200, {
-      ok: true,
-      eventName: state.eventName || '',
-      tickets,
-      stats,
-      updatedAt: state.updatedAt || null,
-    });
+    const payload = { ok: true, events, updatedAt: state.updatedAt || null };
+
+    if (eventId) {
+      const ev = findEvent(state, eventId);
+      if (!ev) return json(404, { ok: false, error: 'event_not_found', events });
+      payload.event = {
+        id: ev.id,
+        name: ev.name,
+        createdAt: ev.createdAt || null,
+        tickets: ev.tickets || [],
+        stats: statsFor(ev.tickets),
+      };
+    }
+
+    return json(200, payload);
   } catch (err) {
     return json(500, { ok: false, error: 'server_error', message: String((err && err.message) || err), debug: blobsDebugInfo() });
   }
