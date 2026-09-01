@@ -212,6 +212,18 @@
     });
   }
 
+  // If the server says an eventId we were holding doesn't exist (e.g. it
+  // was deleted from another tab, or a stale id from before a reconnect),
+  // resync the whole panel from the server truth instead of leaving the UI
+  // stuck showing something that no longer matches reality.
+  function resyncIfEventMissing(result) {
+    if (result && result.status === 404 && result.data && result.data.error === 'event_not_found') {
+      loadEvents();
+      return true;
+    }
+    return false;
+  }
+
   function loadEvents() {
     api('state', 'GET').then(function (result) {
       if (!(result.data && result.data.ok)) {
@@ -311,7 +323,7 @@
             var fallbackId = events.length > 0 ? events[0].id : NEW_EVENT_VALUE;
             selectEventById(fallbackId);
             toast('Evento eliminado.');
-          } else {
+          } else if (!resyncIfEventMissing(result)) {
             toast((result.data && result.data.message) || 'No se pudo eliminar el evento.');
           }
         }).catch(function () {
@@ -385,7 +397,7 @@
           refreshDerivedUI();
           renderPoolView();
           toast(isNew ? 'Evento creado con ' + quantity + ' código' + (quantity === 1 ? '' : 's') + '.' : quantity + ' código' + (quantity === 1 ? '' : 's') + ' agregado' + (quantity === 1 ? '' : 's') + '.');
-        } else {
+        } else if (!resyncIfEventMissing(result)) {
           toast((result.data && result.data.message) || 'No se pudo generar el lote.');
         }
       })
@@ -431,7 +443,7 @@
         inputRecipient.value = '';
       } else if (result.data && result.data.error === 'pool_empty') {
         toast('No quedan códigos disponibles en el pool.');
-      } else {
+      } else if (!resyncIfEventMissing(result)) {
         toast((result.data && result.data.message) || 'No se pudo entregar un código.');
       }
     }).catch(function () {

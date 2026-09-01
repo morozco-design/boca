@@ -50,6 +50,22 @@ function emptyState() {
 // several ({events: [{id, name, tickets, createdAt}]}). Any state blob
 // written before this change is transparently upgraded into the new shape
 // the first time it's read, so existing deployments don't lose their pool.
+//
+// IMPORTANT: the id given to that migrated event MUST be deterministic, not
+// random. readState() is called on every GET (read-only, no write), so if
+// this minted a fresh random id each time, two back-to-back reads of the
+// same still-unmigrated blob would disagree on the event's id — the classic
+// symptom was the panel fetching the event list (id A), then immediately
+// fetching that event's detail (id B, freshly re-migrated), getting a 404,
+// retrying the whole cycle, forever, while every mutation (delete/dispense/
+// cancel) also failed with "event not found" because the id the client held
+// never matched whatever id the next internal read happened to mint. A
+// fixed id sidesteps all of that: there is at most one such legacy event
+// per blob (the old single-event architecture never had more than one), so
+// a constant is safe and every read/write agrees on it until a real
+// mutation persists the new shape (which then keeps this same id forever).
+const LEGACY_EVENT_ID = 'legacy-event';
+
 function migrateState(raw) {
   if (!raw || typeof raw !== 'object') return emptyState();
   if (Array.isArray(raw.events)) return raw;
@@ -57,7 +73,7 @@ function migrateState(raw) {
     return {
       events: [
         {
-          id: randomId(),
+          id: LEGACY_EVENT_ID,
           name: raw.eventName || 'Evento',
           tickets: raw.tickets,
           createdAt: raw.updatedAt || new Date().toISOString(),

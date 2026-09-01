@@ -336,6 +336,45 @@ async function main() {
     assert.strictEqual(body.events[0].stats.total, 1);
   });
 
+  // ---- Regression: the migrated id must be STABLE across reads. Bug found
+  // in production: it used to mint a fresh random id on every read (state.js
+  // never writes), so the panel's list-fetch and detail-fetch disagreed on
+  // the event's id, causing an infinite 404-retry loop and "eliminar evento"
+  // silently failing (the id it sent never matched the id the delete's own
+  // internal read had just re-minted).
+  await test('store.js: el id migrado es estable entre lecturas sucesivas de un blob viejo sin persistir', async () => {
+    mockBlobs.resetAll();
+    const legacyStore = mockBlobs.getStore({ name: 'pase-unico' });
+    await legacyStore.setJSON('state', {
+      eventName: 'Evento Viejo',
+      tickets: [{ code: 'BBBB-2222', status: 'disponible', recipient: null, issuedAt: null, usedAt: null, createdAt: '2025-01-01T00:00:00.000Z' }],
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    }, { onlyIfNew: true });
+
+    const listRes = JSON.parse((await stateFn.handler(adminEvent('GET'))).body);
+    const idFromList = listRes.events[0].id;
+    const detailRes = await stateFn.handler(adminEvent('GET', null, { eventId: idFromList }));
+    assert.strictEqual(detailRes.statusCode, 200, 'el id obtenido del listado debe servir para pedir el detalle sin dar 404');
+    const idFromSecondList = JSON.parse((await stateFn.handler(adminEvent('GET'))).body).events[0].id;
+    assert.strictEqual(idFromSecondList, idFromList, 'dos lecturas del mismo blob viejo deben migrar al mismo id');
+  });
+
+  await test('dispense.js funciona contra un blob viejo sin necesitar ninguna mutación previa que lo migre', async () => {
+    mockBlobs.resetAll();
+    const legacyStore = mockBlobs.getStore({ name: 'pase-unico' });
+    await legacyStore.setJSON('state', {
+      eventName: 'Evento Viejo 2',
+      tickets: [{ code: 'CCCC-3333', status: 'disponible', recipient: null, issuedAt: null, usedAt: null, createdAt: '2025-01-01T00:00:00.000Z' }],
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    }, { onlyIfNew: true });
+
+    const idFromList = JSON.parse((await stateFn.handler(adminEvent('GET'))).body).events[0].id;
+    const res = await dispenseFn.handler(adminEvent('POST', { eventId: idFromList, recipient: 'Alguien' }));
+    const body = JSON.parse(res.body);
+    assert.strictEqual(res.statusCode, 200, 'la entrega debe funcionar aunque el blob todavía no se haya migrado a disco');
+    assert.strictEqual(body.ticket.status, 'emitido');
+  });
+
   console.log('\n' + passCount + ' pruebas OK, ' + failCount + ' fallidas.');
   if (failCount > 0) process.exit(1);
 }
