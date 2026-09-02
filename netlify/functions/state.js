@@ -33,6 +33,7 @@ exports.handler = async (event) => {
         createdAt: ev.createdAt || null,
         tickets: ev.tickets || [],
         stats: statsFor(ev.tickets),
+        hasImage: !!ev.hasImage,
       };
     }
 

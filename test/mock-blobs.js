@@ -26,7 +26,7 @@ function makeStore() {
       await jitter();
       const entry = data.get(key);
       if (!entry) return null;
-      return { data: entry.value, etag: entry.etag, metadata: {} };
+      return { data: entry.value, etag: entry.etag, metadata: entry.metadata || {} };
     },
     async setJSON(key, value, options) {
       await jitter();
@@ -38,8 +38,24 @@ function makeStore() {
         if (!entry || entry.etag !== conditions.onlyIfMatch) return { modified: false };
       }
       const etag = etagFor(value);
-      data.set(key, { value: JSON.parse(JSON.stringify(value)), etag });
+      data.set(key, { value: JSON.parse(JSON.stringify(value)), etag, metadata: {} });
       return { modified: true, etag };
+    },
+    // Raw (non-JSON) set — used by event-image.js to store image bytes.
+    // Real @netlify/blobs accepts string/Blob/ArrayBuffer/Buffer; the mock
+    // just keeps whatever was handed in (a Buffer in practice), which is
+    // enough for Buffer.from(result.data) on the read side to work the same
+    // way it does against the real store.
+    async set(key, value, options) {
+      await jitter();
+      const opts = options || {};
+      const etag = etagFor(Buffer.isBuffer(value) ? value.toString('base64') : value);
+      data.set(key, { value, etag, metadata: opts.metadata || {} });
+      return { etag };
+    },
+    async delete(key) {
+      await jitter();
+      data.delete(key);
     },
     // test helper, not part of the real API
     _dump() {

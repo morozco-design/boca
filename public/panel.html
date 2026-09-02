@@ -25,6 +25,22 @@
     <p class="hint" id="no-events-hint" hidden>Todavía no creaste ningún evento. Completá "Crear evento" abajo para generar el primer lote.</p>
   </div>
 
+  <div class="card" id="image-card" hidden>
+    <h2>Imagen de fondo del pase</h2>
+    <p class="hint hint-left">Se recorta automáticamente a formato vertical (como una pantalla de celular). Al entregar o compartir una entrada, el código QR se muestra encima de esta imagen.</p>
+    <div class="image-upload-row">
+      <div class="image-preview-holder" id="image-preview-holder">
+        <img id="image-preview" alt="Vista previa de la imagen del evento" hidden>
+        <span class="image-preview-empty" id="image-preview-empty">Sin imagen</span>
+      </div>
+      <div class="image-upload-actions">
+        <input type="file" id="input-event-image" accept="image/png,image/jpeg,image/webp" hidden>
+        <button class="btn btn-secondary btn-small" id="btn-choose-image" type="button">Subir imagen</button>
+        <button class="btn btn-danger btn-small" id="btn-remove-image" type="button" hidden>Quitar imagen</button>
+      </div>
+    </div>
+  </div>
+
   <div class="stats-row" id="stats-row">
     <div class="stat"><span class="n" id="stat-total">0</span><span class="l">Total</span></div>
     <div class="stat"><span class="n" id="stat-disponible">0</span><span class="l">Disponibles</span></div>
@@ -44,10 +60,15 @@
   </div>
 
   <div class="card" id="dispense-card">
-    <h2>Entregar código</h2>
+    <h2>Entregar entradas</h2>
     <label for="input-recipient">¿A quién se le entrega? (opcional)</label>
-    <input type="text" id="input-recipient" placeholder="Nombre de la persona">
-    <button class="btn" id="btn-dispense" type="button">Entregar el próximo código</button>
+    <input type="text" id="input-recipient" placeholder="Nombre de la persona" autocomplete="off">
+    <label for="input-dispense-quantity">Cantidad de entradas a entregar</label>
+    <input type="number" id="input-dispense-quantity" min="1" max="500" value="1">
+    <div class="action-row">
+      <button class="btn" id="btn-dispense" type="button">Entregar entradas</button>
+      <button class="btn btn-secondary" id="btn-view-last" type="button" hidden>Ver entrada</button>
+    </div>
   </div>
 
   <div class="card" id="pool-card">
@@ -65,11 +86,9 @@
 </div>
 
 <div id="dispense-modal" class="modal-overlay" hidden>
-  <div class="modal-card">
-    <h3>Código entregado</h3>
-    <div class="qr-holder"><canvas id="modal-qr-holder" width="220" height="220"></canvas></div>
-    <div class="code-text" id="modal-code-text">—</div>
-    <div class="recipient-text" id="modal-recipient-text"></div>
+  <div class="modal-card modal-card--tickets">
+    <h3 id="modal-title">Código entregado</h3>
+    <div id="modal-tickets-list" class="modal-tickets-list"></div>
     <button class="btn" id="btn-close-modal" type="button">Cerrar</button>
   </div>
 </div>

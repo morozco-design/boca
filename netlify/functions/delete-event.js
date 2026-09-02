@@ -2,7 +2,14 @@
 
 const { json, noContent, parseBody } = require('./_lib/http');
 const { isAdminAuthorized } = require('./_lib/auth');
-const { updateState, MutationRejected, initFromEvent, blobsDebugInfo, eventSummaries } = require('./_lib/store');
+const {
+  updateState,
+  MutationRejected,
+  initFromEvent,
+  blobsDebugInfo,
+  eventSummaries,
+  getImageBlobStore,
+} = require('./_lib/store');
 
 // Permanently removes an event and every ticket/code that belongs to it.
 // There is no undo — the panel is expected to confirm with the user before
@@ -30,6 +37,19 @@ exports.handler = async (event) => {
       state.events = events;
       return state;
     });
+
+    // Best-effort cleanup: an orphaned image blob costs nothing functionally
+    // (nothing references it once the event is gone), but there's no reason
+    // to let it linger. Never let this fail the request — the event itself
+    // is already gone by this point.
+    try {
+      await getImageBlobStore().delete(eventId);
+    } catch (imgErr) {
+      console.error('[pase-unico] no se pudo borrar la imagen del evento eliminado:', {
+        eventId,
+        message: imgErr && imgErr.message,
+      });
+    }
 
     return json(200, { ok: true, events: eventSummaries(nextState) });
   } catch (err) {

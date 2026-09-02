@@ -23,6 +23,7 @@ const dispenseFn = require('../netlify/functions/dispense.js');
 const cancelFn = require('../netlify/functions/cancel.js');
 const validateFn = require('../netlify/functions/validate.js');
 const deleteEventFn = require('../netlify/functions/delete-event.js');
+const eventImageFn = require('../netlify/functions/event-image.js');
 
 let passCount = 0;
 let failCount = 0;
@@ -272,6 +273,123 @@ async function main() {
   await test('delete-event.js sobre un evento inexistente devuelve 404', async () => {
     const res = await deleteEventFn.handler(adminEvent('POST', { eventId: 'no-existe' }));
     assert.strictEqual(res.statusCode, 404);
+  });
+
+  // ---- dispense.js quantity: entregar varias entradas de una vez ----
+  await test('dispense.js con quantity entrega varios códigos de una vez al mismo destinatario', async () => {
+    const res = await dispenseFn.handler(adminEvent('POST', { eventId: eventAId, recipient: 'Familia Gómez', quantity: 3 }));
+    const body = JSON.parse(res.body);
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(body.dispensedCount, 3);
+    assert.strictEqual(body.requested, 3);
+    assert.strictEqual(body.tickets.length, 3);
+    const codes = new Set(body.tickets.map((t) => t.code));
+    assert.strictEqual(codes.size, 3, 'los 3 códigos entregados deben ser distintos entre sí');
+    body.tickets.forEach((t) => {
+      assert.strictEqual(t.status, 'emitido');
+      assert.strictEqual(t.recipient, 'Familia Gómez');
+    });
+  });
+
+  await test('dispense.js con quantity mayor al pool disponible entrega lo que queda y lo informa', async () => {
+    const genRes = await generateFn.handler(adminEvent('POST', { eventName: 'Pool Chico', quantity: 2 }));
+    const smallEventId = JSON.parse(genRes.body).event.id;
+    const res = await dispenseFn.handler(adminEvent('POST', { eventId: smallEventId, recipient: 'Grupo Grande', quantity: 5 }));
+    const body = JSON.parse(res.body);
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(body.requested, 5);
+    assert.strictEqual(body.dispensedCount, 2, 'sólo debe entregar los 2 que había disponibles');
+    assert.strictEqual(body.stats.disponible, 0);
+  });
+
+  await test('dispense.js con quantity inválida (0, negativa o no entera) devuelve 400', async () => {
+    const res0 = await dispenseFn.handler(adminEvent('POST', { eventId: eventAId, quantity: 0 }));
+    assert.strictEqual(res0.statusCode, 400);
+    const resNeg = await dispenseFn.handler(adminEvent('POST', { eventId: eventAId, quantity: -1 }));
+    assert.strictEqual(resNeg.statusCode, 400);
+    const resFloat = await dispenseFn.handler(adminEvent('POST', { eventId: eventAId, quantity: 2.5 }));
+    assert.strictEqual(resFloat.statusCode, 400);
+  });
+
+  // ---- event-image.js: imagen de fondo por evento ----
+  const TINY_PNG_DATA_URL =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+
+  await test('event-image.js: GET sin imagen subida devuelve 404', async () => {
+    const res = await eventImageFn.handler(adminEvent('GET', null, { eventId: eventAId }));
+    assert.strictEqual(res.statusCode, 404);
+  });
+
+  await test('event-image.js: POST sube una imagen válida y marca hasImage en el evento', async () => {
+    const res = await eventImageFn.handler(adminEvent('POST', { eventId: eventAId, imageDataUrl: TINY_PNG_DATA_URL }));
+    const body = JSON.parse(res.body);
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(body.ok, true);
+    assert.strictEqual(body.hasImage, true);
+
+    const stateRes = JSON.parse((await stateFn.handler(adminEvent('GET', null, { eventId: eventAId }))).body);
+    assert.strictEqual(stateRes.event.hasImage, true, 'el detalle del evento debe reflejar hasImage');
+    const listRes = JSON.parse((await stateFn.handler(adminEvent('GET'))).body);
+    assert.strictEqual(listRes.events.find((e) => e.id === eventAId).hasImage, true, 'el listado también debe reflejar hasImage');
+  });
+
+  await test('event-image.js: GET después de subir devuelve los mismos bytes con el content-type correcto', async () => {
+    const res = await eventImageFn.handler(adminEvent('GET', null, { eventId: eventAId }));
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(res.headers['Content-Type'], 'image/png');
+    assert.strictEqual(res.isBase64Encoded, true);
+    const expectedBase64 = TINY_PNG_DATA_URL.split(',')[1];
+    assert.strictEqual(res.body, expectedBase64);
+  });
+
+  await test('event-image.js: POST con data URL inválida devuelve 400', async () => {
+    const res = await eventImageFn.handler(adminEvent('POST', { eventId: eventAId, imageDataUrl: 'not-a-data-url' }));
+    assert.strictEqual(res.statusCode, 400);
+    assert.strictEqual(JSON.parse(res.body).error, 'invalid_image');
+  });
+
+  await test('event-image.js: POST con eventId inexistente devuelve 404 y no escribe ninguna imagen', async () => {
+    const res = await eventImageFn.handler(adminEvent('POST', { eventId: 'no-existe', imageDataUrl: TINY_PNG_DATA_URL }));
+    assert.strictEqual(res.statusCode, 404);
+  });
+
+  await test('event-image.js: GET/DELETE sin eventId devuelven 400', async () => {
+    const getRes = await eventImageFn.handler(adminEvent('GET', null, {}));
+    assert.strictEqual(getRes.statusCode, 400);
+    const delRes = await eventImageFn.handler(adminEvent('DELETE', null, {}));
+    assert.strictEqual(delRes.statusCode, 400);
+  });
+
+  await test('event-image.js: DELETE quita la imagen y desmarca hasImage', async () => {
+    const res = await eventImageFn.handler(adminEvent('DELETE', null, { eventId: eventAId }));
+    const body = JSON.parse(res.body);
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(body.hasImage, false);
+
+    const stateRes = JSON.parse((await stateFn.handler(adminEvent('GET', null, { eventId: eventAId }))).body);
+    assert.strictEqual(stateRes.event.hasImage, false);
+
+    const getRes = await eventImageFn.handler(adminEvent('GET', null, { eventId: eventAId }));
+    assert.strictEqual(getRes.statusCode, 404, 'tras borrarla, la imagen ya no debe estar disponible');
+  });
+
+  await test('event-image.js: DELETE sobre un evento sin imagen (o inexistente) devuelve 404', async () => {
+    const res = await eventImageFn.handler(adminEvent('DELETE', null, { eventId: 'no-existe' }));
+    assert.strictEqual(res.statusCode, 404);
+  });
+
+  await test('delete-event.js borra en cascada la imagen del evento eliminado', async () => {
+    const genRes = await generateFn.handler(adminEvent('POST', { eventName: 'Con Imagen', quantity: 2 }));
+    const imgEventId = JSON.parse(genRes.body).event.id;
+    await eventImageFn.handler(adminEvent('POST', { eventId: imgEventId, imageDataUrl: TINY_PNG_DATA_URL }));
+
+    const beforeDelete = await eventImageFn.handler(adminEvent('GET', null, { eventId: imgEventId }));
+    assert.strictEqual(beforeDelete.statusCode, 200, 'la imagen debe existir antes de borrar el evento');
+
+    await deleteEventFn.handler(adminEvent('POST', { eventId: imgEventId }));
+
+    const afterDelete = await eventImageFn.handler(adminEvent('GET', null, { eventId: imgEventId }));
+    assert.strictEqual(afterDelete.statusCode, 404, 'la imagen debe desaparecer junto con el evento');
   });
 
   // ---- Concurrency: two simultaneous dispenses racing for one remaining ticket ----

@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { getStore, connectLambda } = require('@netlify/blobs');
 
 const STORE_NAME = 'pase-unico';
+const IMAGE_STORE_NAME = 'pase-unico-images';
 const STATE_KEY = 'state';
 const MAX_RETRIES = 8;
 
@@ -102,6 +103,7 @@ function eventSummaries(state) {
     name: ev.name,
     createdAt: ev.createdAt || null,
     stats: statsFor(ev.tickets),
+    hasImage: !!ev.hasImage,
   }));
 }
 
@@ -152,6 +154,15 @@ function manualBlobsOptions() {
 // serves correctly once the write has propagated.
 function getBlobStore() {
   return getStore({ name: STORE_NAME, ...manualBlobsOptions() });
+}
+
+// Separate store for event background images (raw bytes, keyed by eventId)
+// — kept apart from the main JSON state blob so uploading/serving an image
+// never has to read-modify-write the whole ticket pool, and so the state
+// blob itself stays small and fast regardless of how many events have a
+// custom image attached.
+function getImageBlobStore() {
+  return getStore({ name: IMAGE_STORE_NAME, ...manualBlobsOptions() });
 }
 
 // Reads the current state plus its ETag (undefined if the key has never
@@ -222,6 +233,8 @@ module.exports = {
   statsFor,
   eventSummaries,
   findEvent,
+  getImageBlobStore,
   STORE_NAME,
   STATE_KEY,
+  IMAGE_STORE_NAME,
 };

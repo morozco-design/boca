@@ -16,11 +16,15 @@ las restricciones que tienen los artifacts de Claude.
   entregar códigos, cancelar entregas, buscar e imprimir. **Tampoco pide
   clave** — cualquiera con el link puede usarlo (ver la sección de
   Seguridad más abajo).
-- `netlify/functions/` — 6 funciones serverless: `state`, `generate`,
-  `dispense`, `cancel`, `delete-event` y `validate` (la que usa la página de
-  escaneo). Ninguna requiere autenticación.
+- `netlify/functions/` — 7 funciones serverless: `state`, `generate`,
+  `dispense`, `cancel`, `delete-event`, `event-image` (imagen de fondo por
+  evento) y `validate` (la que usa la página de escaneo). Ninguna requiere
+  autenticación.
 - `test/` — pruebas automáticas de la lógica (no hace falta correrlas, pero
   quedan documentadas; ver más abajo).
+- `sample-coro-rodal.jpg` — imagen de prueba (formato vertical, con un logo
+  placeholder de "Coro Rodal") pensada para probar la función de imagen de
+  fondo sin tener que conseguir una imagen real primero.
 
 ## Múltiples eventos
 
@@ -42,6 +46,35 @@ independiente entre sí:
   pública de escaneo (`/index.html`) no necesita saber de qué evento es un
   código — lo identifica automáticamente al escanearlo.
 
+## Imagen de fondo por evento
+
+Cada evento puede tener su propia imagen de fondo, para que el código QR que
+se muestra al entregar o compartir una entrada funcione como un pase de
+acceso completo (no sólo un QR pelado):
+
+- En `/panel.html`, con un evento seleccionado, aparece la tarjeta **"Imagen
+  de fondo del pase"** con una vista previa y un botón **"Subir imagen"**.
+  Podés elegir cualquier foto o diseño (PNG, JPG o WEBP) — el panel la
+  recorta y ajusta automáticamente a formato vertical (como la pantalla de
+  un celular, proporción 9:16), así que no hace falta prepararla antes.
+- Una vez subida, cada vez que se entrega o se comparte una entrada de ese
+  evento (desde "Entregar entradas", "Ver entrada" o "Compartir por
+  WhatsApp"), el código QR se dibuja dentro de una tarjeta blanca sobre esa
+  imagen, junto con el nombre del evento, el código y (si corresponde) el
+  nombre de a quién se le entregó — el resultado es una sola imagen lista
+  para mostrar en la entrada o enviar por WhatsApp.
+- El botón **"Quitar imagen"** saca la imagen del evento; a partir de ahí las
+  entradas vuelven a mostrarse con el QR simple (como antes de subir una).
+- Si un evento no tiene imagen cargada, todo sigue funcionando exactamente
+  igual que antes (QR simple, sin tarjeta de fondo) — esto es totalmente
+  opcional por evento.
+- "Imprimir entregados" sigue imprimiendo QRs simples (sin la imagen), para
+  no gastar tinta de más en las impresiones en lote.
+- Al eliminar un evento, su imagen se borra junto con él.
+- `sample-coro-rodal.jpg` (en la raíz del proyecto) es una imagen de prueba
+  lista para usar con este botón, si querés ver el resultado sin buscar una
+  imagen propia primero.
+
 ## 1. Desplegar en Netlify
 
 **Importante:** este proyecto tiene funciones de servidor con una dependencia
@@ -60,9 +93,10 @@ con la Netlify CLI.
    **"uploading an existing file"** — hacé click ahí.
 4. Descomprimí el .zip de este proyecto en tu computadora, y arrastrá **todo
    el contenido** de la carpeta (las carpetas `netlify/`, `public/`, `test/`,
-   y los archivos `netlify.toml`, `package.json`, `package-lock.json`,
-   `README.md`, `.gitignore`) al recuadro de GitHub. Los navegadores modernos
-   soportan arrastrar carpetas enteras manteniendo su estructura.
+   `scripts/`, y los archivos `netlify.toml`, `package.json`,
+   `package-lock.json`, `README.md`, `.gitignore`, `sample-coro-rodal.jpg`)
+   al recuadro de GitHub. Los navegadores modernos soportan arrastrar
+   carpetas enteras manteniendo su estructura.
 5. Abajo de todo, tocá **"Commit changes"** para subirlo a la rama principal.
 6. Si ya tenés un sitio creado en Netlify (el que hiciste por drag-and-drop):
    entrá a ese sitio → **Project configuration → Build & deploy →
@@ -123,9 +157,22 @@ Blobs directamente, sin depender del mecanismo automático que venía fallando.
 
 - **Generar y entregar entradas**: entrá a `https://tu-sitio.netlify.app/panel.html`
   (ya carga directo, sin pedir clave), generá el lote (por ejemplo 300
-  códigos) y entregá uno por uno con el botón "Entregar el próximo
-  código" — ahí podés anotar a quién se lo diste. Cada código entregado
-  queda con su QR para mostrar o imprimir.
+  códigos) y entregalas con el botón "Entregar entradas" — podés anotar a
+  quién se las diste y elegir **cuántas entregarle de una sola vez** (por
+  ejemplo, 4 para una familia): cada una recibe su propio código QR único,
+  todas a nombre de esa misma persona. Si pedís más de las que quedan
+  disponibles, se entregan las que hay y el panel te avisa cuántas fueron.
+  Al lado del botón aparece **"Ver entrada"**, que vuelve a mostrar la
+  última entrega (con su QR) sin tener que buscarla en la lista.
+- **Ver o compartir una entrada ya entregada**: en "Lote de códigos", cada
+  entrada entregada tiene sus propios botones **"Ver entrada"** (la muestra
+  igual que en el momento de entregarla) y **"Compartir por WhatsApp"**. En
+  el celular, este último abre el selector de aplicaciones para compartir
+  el código QR como imagen directamente por WhatsApp (o cualquier otra
+  app); en la computadora, como los navegadores no permiten adjuntar una
+  imagen a un link de WhatsApp, abre WhatsApp Web con el código en texto en
+  vez de la imagen — para mandar la imagen desde la compu, lo más simple es
+  usar "Imprimir entregados" o hacerle una captura de pantalla al QR.
 - **Escanear en la puerta**: quien controla el ingreso abre
   `https://tu-sitio.netlify.app/` (o `/index.html`) en el navegador del
   celular — **esta página es pública, no necesita la clave** — y toca
@@ -169,8 +216,16 @@ npm install
 npm test
 ```
 
-Esto corre 28 pruebas contra una versión simulada de Netlify Blobs en
+Esto corre 42 pruebas contra una versión simulada de Netlify Blobs en
 memoria (incluye pruebas de aislamiento entre eventos, borrado de eventos,
-migración automática de un estado guardado con la versión anterior de un
-solo evento, y dos pruebas de concurrencia: varias entregas o escaneos
-simultáneos compitiendo por el mismo código).
+entrega de varios códigos de una vez, migración automática y estable de un
+estado guardado con la versión anterior de un solo evento, subida/lectura/
+borrado de la imagen de un evento (incluido el borrado en cascada al
+eliminar el evento), y dos pruebas de concurrencia: varias entregas o
+escaneos simultáneos compitiendo por el mismo código). Aparte,
+`test/playwright-check.js` corre 39 pruebas de navegador contra la interfaz
+real (panel + escáner), incluyendo la entrega de varias entradas de una vez,
+"Ver entrada", el botón de compartir por WhatsApp, y la subida/composición/
+borrado de la imagen de fondo por evento (necesita un servidor estático
+local sirviendo `public/`, por ejemplo `python3 -m http.server 8765
+--directory public`, corriendo en paralelo).
