@@ -181,28 +181,29 @@ select { appearance: auto; }
 
 .stats-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
   margin-bottom: 16px;
 }
 .stat {
   background: var(--paper-raised);
   border: 1px solid var(--line);
   border-radius: 14px;
-  padding: 12px 8px;
+  padding: 10px 4px;
   text-align: center;
 }
 .stat .n {
   font-family: var(--font-mono);
-  font-size: 1.4rem;
+  font-size: 1.2rem;
   font-weight: 600;
   display: block;
 }
 .stat .l {
-  font-size: 0.7rem;
+  font-size: 0.62rem;
   color: var(--ink-soft);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
+  display: block;
 }
 
 .banner {
@@ -312,6 +313,56 @@ select { appearance: auto; }
 .scan-status--valid { background: var(--good-bg); color: var(--good); }
 .scan-status--used { background: var(--bad-bg); color: var(--bad); }
 .scan-status--unknown { background: var(--unknown-bg); color: var(--unknown); }
+
+/* Fullscreen pass/fail result — green for a valid scan, red for any error
+   (already used, not issued, unrecognized) — with a big button to dismiss
+   and go straight back to scanning the next ticket. */
+.scan-result-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px;
+  text-align: center;
+  color: #ffffff;
+}
+.scan-result-overlay--valid { background: #1c8354; }
+.scan-result-overlay--error { background: #c23b2e; }
+.scan-result-icon {
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 56px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+.scan-result-headline {
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  font-weight: 600;
+}
+.scan-result-sub {
+  font-size: 1rem;
+  opacity: 0.92;
+  max-width: 320px;
+}
+.scan-result-btn {
+  width: auto;
+  padding: 14px 30px;
+  margin-top: 22px;
+  background: #ffffff;
+  color: #1c8354;
+}
+.scan-result-overlay--error .scan-result-btn { color: #c23b2e; }
 
 .qr-holder {
   display: flex;

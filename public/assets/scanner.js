@@ -11,9 +11,19 @@
   var headlineEl = document.getElementById('scan-headline');
   var subEl = document.getElementById('scan-sub');
   var toastRegion = document.getElementById('toast-region');
+  var resultOverlay = document.getElementById('scan-result-overlay');
+  var resultIcon = document.getElementById('scan-result-icon');
+  var resultHeadline = document.getElementById('scan-result-headline');
+  var resultSub = document.getElementById('scan-result-sub');
+  var btnScanNext = document.getElementById('btn-scan-next');
 
   var scanning = false;
   var busy = false; // a validate request is in flight
+  // true while the full-screen green/red result is up, waiting for the
+  // operator to tap "Escanear siguiente" — decoding is paused meanwhile so
+  // the same code (or the next one held up to the camera) isn't scanned
+  // again before they've seen the result.
+  var awaitingNext = false;
   var lastCode = null;
   var lastTime = 0;
   var COOLDOWN_MS = 2500;
@@ -57,6 +67,26 @@
     headlineEl.textContent = headline;
     subEl.textContent = sub || '';
   }
+
+  // Full-screen pass/fail screen: green ('valid') for a successful scan,
+  // red ('error') for any rejection. Pauses scanning until the operator
+  // explicitly taps "Escanear siguiente".
+  function showResult(kind, headline, sub) {
+    awaitingNext = true;
+    statusBox.hidden = true;
+    resultOverlay.hidden = false;
+    resultOverlay.className = 'scan-result-overlay scan-result-overlay--' + kind;
+    resultIcon.textContent = kind === 'valid' ? '✓' : '✕';
+    resultHeadline.textContent = headline;
+    resultSub.textContent = sub || '';
+  }
+
+  btnScanNext.addEventListener('click', function () {
+    resultOverlay.hidden = true;
+    awaitingNext = false;
+    lastCode = null;
+    lastTime = 0;
+  });
 
   function describeError(err) {
     var name = err && err.name;
@@ -104,7 +134,7 @@
 
   function tick() {
     if (!scanning) return;
-    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+    if (!awaitingNext && video.readyState === video.HAVE_ENOUGH_DATA) {
       var vw = video.videoWidth;
       var vh = video.videoHeight;
       if (vw && vh) {
@@ -129,7 +159,7 @@
   }
 
   function handleDecoded(text) {
-    if (busy) return;
+    if (busy || awaitingNext) return;
     var now = Date.now();
     if (text === lastCode && now - lastTime < COOLDOWN_MS) return;
     if (!text.startsWith(QR_PREFIX)) return;
@@ -157,22 +187,24 @@
         if (data.ok) {
           beep(880, 140);
           var sub = data.recipient ? 'A nombre de ' + data.recipient : code;
-          setScanStatus('valid', 'Ingreso habilitado', sub);
+          showResult('valid', 'Ingreso habilitado', sub);
         } else if (data.reason === 'already_used') {
           beep(220, 260);
-          setScanStatus('used', 'Código ya utilizado', 'Este pase ya ingresó antes.');
+          showResult('error', 'Código ya utilizado', 'Este pase ya ingresó antes.');
         } else if (data.reason === 'not_issued') {
           beep(220, 260);
-          setScanStatus('used', 'Código no entregado', 'Este código todavía no fue entregado a nadie.');
+          showResult('error', 'Código no entregado', 'Este código todavía no fue entregado a nadie.');
         } else if (data.reason === 'not_found') {
           beep(220, 260);
-          setScanStatus('used', 'Código no reconocido', 'Este código no pertenece a este evento.');
+          showResult('error', 'Código no reconocido', 'Este código no pertenece a este evento.');
         } else {
-          setScanStatus('unknown', 'No se pudo validar', data.error || '');
+          beep(220, 260);
+          showResult('error', 'No se pudo validar', data.error || '');
         }
       })
       .catch(function () {
-        setScanStatus('unknown', 'Sin conexión', 'No se pudo contactar al servidor. Probá de nuevo.');
+        beep(220, 260);
+        showResult('error', 'Sin conexión', 'No se pudo contactar al servidor. Probá de nuevo.');
       })
       .finally(function () {
         busy = false;

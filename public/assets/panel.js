@@ -7,7 +7,8 @@
 
   var statTotal = document.getElementById('stat-total');
   var statDisponible = document.getElementById('stat-disponible');
-  var statEmitido = document.getElementById('stat-emitido');
+  var statVendidas = document.getElementById('stat-vendidas');
+  var statUsadas = document.getElementById('stat-usadas');
   var soldOutBanner = document.getElementById('sold-out-banner');
   var statsRow = document.getElementById('stats-row');
 
@@ -256,16 +257,11 @@
     ctx.closePath();
   }
 
-  function truncateText(s, max) {
-    s = String(s || '');
-    return s.length > max ? s.slice(0, max - 1) + '…' : s;
-  }
-
   // Draws the event's background image "cover"-fit into a 1080x1920 canvas,
-  // then a white rounded card near the bottom holding the event name, the
-  // QR, the code, and (if any) the recipient — the finished result is a
-  // self-contained, usable access pass.
-  function drawTicketCard(canvas, bgImg, ticket, eventName) {
+  // then a white rounded card near the bottom holding the QR and — the only
+  // text on the whole card — the ticket number underneath it, so the result
+  // reads as a clean access pass without extra clutter.
+  function drawTicketCard(canvas, bgImg, ticket) {
     canvas.width = CARD_W;
     canvas.height = CARD_H;
     var ctx = canvas.getContext('2d');
@@ -278,13 +274,11 @@
     ctx.drawImage(bgImg, dx, dy, dw, dh);
 
     var padding = 40;
-    var titleH = 54;
     var qrSize = 480;
     var gapAfterQr = 30;
     var codeH = 46;
-    var recipientH = ticket.recipient ? 36 : 0;
     var cardW = CARD_W - 96;
-    var cardH = padding * 2 + titleH + qrSize + gapAfterQr + codeH + recipientH;
+    var cardH = padding * 2 + qrSize + gapAfterQr + codeH;
     var cardX = (CARD_W - cardW) / 2;
     var cardY = CARD_H - cardH - 96;
 
@@ -298,26 +292,14 @@
     ctx.restore();
 
     var cursorY = cardY + padding;
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#413a5c';
-    ctx.font = '600 32px Sora, sans-serif';
-    ctx.fillText(truncateText(eventName || 'Evento', 30), CARD_W / 2, cursorY + 30);
-    cursorY += titleH;
-
     var qrX = CARD_W / 2 - qrSize / 2;
     drawQRModules(ctx, QR_PREFIX + ticket.code, qrX, cursorY, qrSize);
     cursorY += qrSize + gapAfterQr;
 
+    ctx.textAlign = 'center';
     ctx.fillStyle = '#181325';
     ctx.font = '600 38px "IBM Plex Mono", monospace';
     ctx.fillText(ticket.code, CARD_W / 2, cursorY + 32);
-    cursorY += codeH;
-
-    if (ticket.recipient) {
-      ctx.fillStyle = '#6a6284';
-      ctx.font = '500 28px Sora, sans-serif';
-      ctx.fillText(truncateText('A nombre de ' + ticket.recipient, 34), CARD_W / 2, cursorY + 24);
-    }
   }
 
   // Reads a File, decodes it, and center-crops/"cover"-fits it into a
@@ -360,54 +342,61 @@
     return (currentEvent.tickets || []).find(function (t) { return t.code === code; }) || null;
   }
 
-  function buildShareMessage(ticket) {
-    var lines = ['🎟️ Entrada para ' + (currentEvent.name || 'el evento')];
-    if (ticket.recipient) lines.push('A nombre de: ' + ticket.recipient);
-    lines.push('Código: ' + ticket.code);
-    lines.push('Mostrá este código QR en la entrada. Es válido para un solo ingreso.');
-    return lines.join('\n');
-  }
-
-  function fallbackWhatsAppShare(message) {
-    window.open('https://wa.me/?text=' + encodeURIComponent(message), '_blank');
-  }
-
-  // Shares a single ticket's QR. Prefers the native share sheet with the QR
-  // as an actual image file (works on most mobile browsers, lets the person
-  // pick WhatsApp from the list); if the browser can't share files (mostly
-  // desktop), falls back to opening WhatsApp with the code as text — no
-  // browser can attach an arbitrary image to a wa.me link, so the image
-  // itself only travels through the native share sheet.
-  function shareTicketViaWhatsApp(ticket) {
-    if (!ticket) return;
-    var message = buildShareMessage(ticket);
-    var imgPromise = currentEvent.hasImage
+  // No caption/title is ever attached to the share — just the ticket image
+  // (composited with the event's background when it has one, or the plain
+  // QR otherwise) — per explicit request: WhatsApp should receive only the
+  // image and nothing else.
+  function ticketImageBlob(ticket) {
+    return currentEvent.hasImage
       ? loadBackgroundImage(currentEventId).then(function (bgImg) {
           var canvas = document.createElement('canvas');
-          drawTicketCard(canvas, bgImg, ticket, currentEvent.name);
+          drawTicketCard(canvas, bgImg, ticket);
           return new Promise(function (resolve) {
             if (canvas.toBlob) canvas.toBlob(function (blob) { resolve(blob); }, 'image/jpeg', 0.92);
             else resolve(null);
           });
         }).catch(function () { return qrBlobAsync(QR_PREFIX + ticket.code, 600); })
       : qrBlobAsync(QR_PREFIX + ticket.code, 600);
+  }
 
-    imgPromise.then(function (blob) {
+  // No browser can attach an arbitrary file to a wa.me link — that only
+  // works through the native share sheet. So when file sharing isn't
+  // available (mostly desktop), the closest honest equivalent to "share
+  // only the image" is: download the image (nothing else) and open
+  // WhatsApp with a blank chat so it can be attached by hand.
+  function downloadImageAndOpenWhatsApp(blob, ticket) {
+    if (blob) {
+      var url = URL.createObjectURL(blob);
+      var ext = blob.type === 'image/jpeg' ? '.jpg' : '.png';
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'entrada-' + ticket.code + ext;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+      toast('Se descargó la imagen de la entrada — adjuntala en WhatsApp.');
+    }
+    window.open('https://wa.me/', '_blank');
+  }
+
+  // Shares a single ticket's image (QR, or QR-on-background when the event
+  // has one) via the native share sheet, preferring a real image file so
+  // WhatsApp receives just the picture with no accompanying text.
+  function shareTicketViaWhatsApp(ticket) {
+    if (!ticket) return;
+    ticketImageBlob(ticket).then(function (blob) {
       var file = null;
-      var ext = blob && blob.type === 'image/jpeg' ? '.jpg' : '.png';
       if (blob && typeof File === 'function') {
+        var ext = blob.type === 'image/jpeg' ? '.jpg' : '.png';
         try { file = new File([blob], 'entrada-' + ticket.code + ext, { type: blob.type || 'image/png' }); } catch (e) { file = null; }
       }
       if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
-        navigator.share({ files: [file], title: 'Entrada', text: message }).catch(function (err) {
-          if (!err || err.name !== 'AbortError') fallbackWhatsAppShare(message);
-        });
-      } else if (navigator.share) {
-        navigator.share({ title: 'Entrada', text: message }).catch(function (err) {
-          if (!err || err.name !== 'AbortError') fallbackWhatsAppShare(message);
+        navigator.share({ files: [file] }).catch(function (err) {
+          if (!err || err.name !== 'AbortError') downloadImageAndOpenWhatsApp(blob, ticket);
         });
       } else {
-        fallbackWhatsAppShare(message);
+        downloadImageAndOpenWhatsApp(blob, ticket);
       }
     });
   }
@@ -560,10 +549,12 @@
     var tickets = currentEvent.tickets || [];
     var total = tickets.length;
     var disponible = tickets.filter(function (t) { return t.status === 'disponible'; }).length;
-    var emitido = tickets.filter(function (t) { return t.status === 'emitido'; }).length;
+    var vendidas = tickets.filter(function (t) { return t.status === 'emitido'; }).length;
+    var usadas = tickets.filter(function (t) { return t.status === 'usado'; }).length;
     statTotal.textContent = total;
     statDisponible.textContent = disponible;
-    statEmitido.textContent = emitido;
+    statVendidas.textContent = vendidas;
+    statUsadas.textContent = usadas;
     soldOutBanner.hidden = isNewMode() || !(total > 0 && disponible === 0);
     btnDispense.disabled = disponible === 0;
   }
@@ -901,7 +892,6 @@
       return '<div class="modal-ticket">' +
         '<div class="qr-holder"><canvas class="modal-qr-canvas" data-code="' + escapeHtml(t.code) + '" width="200" height="200"></canvas></div>' +
         '<div class="code-text">' + escapeHtml(t.code) + '</div>' +
-        '<div class="recipient-text">' + (t.recipient ? 'A nombre de ' + escapeHtml(t.recipient) : '') + '</div>' +
         '<button class="btn btn-whatsapp btn-share-whatsapp" type="button" data-code="' + escapeHtml(t.code) + '">Compartir por WhatsApp</button>' +
         '</div>';
     }).join('');
@@ -914,7 +904,7 @@
         for (var i = 0; i < ticketCanvases.length; i++) {
           var canvas = ticketCanvases[i];
           var ticket = findTicketByCode(canvas.getAttribute('data-code'));
-          if (ticket) drawTicketCard(canvas, bgImg, ticket, currentEvent.name);
+          if (ticket) drawTicketCard(canvas, bgImg, ticket);
         }
       }).catch(function () {
         // Background failed to load (e.g. removed mid-session from another
@@ -951,7 +941,6 @@
       return '<div style="display:inline-block;width:33%;text-align:center;padding:12px;box-sizing:border-box;">' +
         '<img src="' + url + '" style="width:160px;height:160px;" />' +
         '<div style="font-family:monospace;font-size:14px;margin-top:4px;">' + escapeHtml(t.code) + '</div>' +
-        '<div style="font-size:12px;color:#555;">' + escapeHtml(t.recipient || '') + '</div>' +
         '</div>';
     }).join('');
     printArea.innerHTML = html;

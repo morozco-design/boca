@@ -60,9 +60,9 @@ acceso completo (no sólo un QR pelado):
 - Una vez subida, cada vez que se entrega o se comparte una entrada de ese
   evento (desde "Entregar entradas", "Ver entrada" o "Compartir por
   WhatsApp"), el código QR se dibuja dentro de una tarjeta blanca sobre esa
-  imagen, junto con el nombre del evento, el código y (si corresponde) el
-  nombre de a quién se le entregó — el resultado es una sola imagen lista
-  para mostrar en la entrada o enviar por WhatsApp.
+  imagen — el único texto que aparece junto al QR es el número de entrada,
+  sin nombre de evento ni destinatario — y el resultado es una sola imagen
+  lista para mostrar en la entrada o enviar por WhatsApp.
 - El botón **"Quitar imagen"** saca la imagen del evento; a partir de ahí las
   entradas vuelven a mostrarse con el QR simple (como antes de subir una).
 - Si un evento no tiene imagen cargada, todo sigue funcionando exactamente
@@ -163,21 +163,30 @@ Blobs directamente, sin depender del mecanismo automático que venía fallando.
   todas a nombre de esa misma persona. Si pedís más de las que quedan
   disponibles, se entregan las que hay y el panel te avisa cuántas fueron.
   Al lado del botón aparece **"Ver entrada"**, que vuelve a mostrar la
-  última entrega (con su QR) sin tener que buscarla en la lista.
+  última entrega (con su QR) sin tener que buscarla en la lista. El único
+  texto que aparece junto al QR generado es el **número de entrada** — nada
+  de nombre de evento ni de destinatario.
+- **Contadores del panel**: arriba de todo se muestran 4 números por
+  evento — **Totales**, **Disponibles**, **Vendidas** (entregadas, pero
+  todavía no usadas en la puerta) y **Usadas** (ya ingresaron con ese
+  código).
 - **Ver o compartir una entrada ya entregada**: en "Lote de códigos", cada
   entrada entregada tiene sus propios botones **"Ver entrada"** (la muestra
   igual que en el momento de entregarla) y **"Compartir por WhatsApp"**. En
-  el celular, este último abre el selector de aplicaciones para compartir
-  el código QR como imagen directamente por WhatsApp (o cualquier otra
-  app); en la computadora, como los navegadores no permiten adjuntar una
-  imagen a un link de WhatsApp, abre WhatsApp Web con el código en texto en
-  vez de la imagen — para mandar la imagen desde la compu, lo más simple es
-  usar "Imprimir entregados" o hacerle una captura de pantalla al QR.
+  el celular, este último abre el selector de aplicaciones y comparte
+  **únicamente la imagen** del pase (nada de texto ni título junto a ella);
+  en la computadora, como los navegadores no permiten adjuntar un archivo a
+  un link de WhatsApp de forma automática, el panel descarga esa misma
+  imagen (y sólo la imagen) y abre WhatsApp Web para que la adjuntes a mano.
 - **Escanear en la puerta**: quien controla el ingreso abre
   `https://tu-sitio.netlify.app/` (o `/index.html`) en el navegador del
   celular — **esta página es pública, no necesita la clave** — y toca
-  "Activar cámara". Cada código habilita el ingreso una única vez; si se
-  intenta usar de nuevo, se rechaza.
+  "Activar cámara". Cada código habilita el ingreso una única vez. Al
+  escanear, la pantalla se pone **verde** ("Ingreso habilitado") si el
+  código es válido, o **roja** si hay algún problema (ya usado, no
+  entregado, o no reconocido); en cualquiera de los dos casos, el escaneo
+  se pausa hasta que tocás **"Escanear siguiente"**, para no arriesgarse a
+  registrar dos entradas seguidas por error.
 - **Cancelar una entrega** (si alguien no retiró la entrada, por ejemplo):
   en el panel, buscá el código y tocá "Cancelar entrega" — vuelve al pool
   de disponibles.
@@ -223,9 +232,13 @@ estado guardado con la versión anterior de un solo evento, subida/lectura/
 borrado de la imagen de un evento (incluido el borrado en cascada al
 eliminar el evento), y dos pruebas de concurrencia: varias entregas o
 escaneos simultáneos compitiendo por el mismo código). Aparte,
-`test/playwright-check.js` corre 39 pruebas de navegador contra la interfaz
+`test/playwright-check.js` corre 52 pruebas de navegador contra la interfaz
 real (panel + escáner), incluyendo la entrega de varias entradas de una vez,
-"Ver entrada", el botón de compartir por WhatsApp, y la subida/composición/
-borrado de la imagen de fondo por evento (necesita un servidor estático
-local sirviendo `public/`, por ejemplo `python3 -m http.server 8765
---directory public`, corriendo en paralelo).
+"Ver entrada", que compartir por WhatsApp mande sólo la imagen (sin texto),
+los 4 contadores del panel, la subida/composición/borrado de la imagen de
+fondo por evento, y en el escáner — con una cámara simulada que transmite un
+QR real via `canvas.captureStream()` — el ciclo completo de escaneo válido
+(pantalla verde), escaneo rechazado (pantalla roja) y el botón "Escanear
+siguiente" (necesita un servidor estático local sirviendo `public/`, por
+ejemplo `python3 -m http.server 8765 --directory public`, corriendo en
+paralelo).

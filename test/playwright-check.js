@@ -212,6 +212,7 @@ async function main() {
   check('panel: modal muestra exactamente 1 entrada', modalTicketCount1 === 1);
   const modalCode = (await page.textContent('.modal-ticket .code-text')).trim();
   check('panel: modal muestra un código', modalCode.length > 0);
+  check('panel: el único texto junto al QR es el número de entrada (sin destinatario)', await page.$('.modal-ticket .recipient-text') === null);
 
   // QR actually rendered onto the canvas (non-blank)
   const qrDrawn = await page.evaluate(() => {
@@ -237,8 +238,10 @@ async function main() {
   await page.click('#btn-close-modal');
   await page.waitForTimeout(150);
 
-  const emitidoStat = await page.textContent('#stat-emitido');
-  check('panel: stat emitido = 1 tras entrega', emitidoStat.trim() === '1');
+  const vendidasStat = await page.textContent('#stat-vendidas');
+  check('panel: stat vendidas = 1 tras entrega', vendidasStat.trim() === '1');
+  const usadasStatInitial = await page.textContent('#stat-usadas');
+  check('panel: stat usadas = 0 todavía (nada fue escaneado)', usadasStatInitial.trim() === '0');
 
   // Dispense several at once to the same recipient
   await page.fill('#input-recipient', 'Familia López');
@@ -247,15 +250,16 @@ async function main() {
   await page.waitForTimeout(300);
   const modalTicketCount3 = await page.$$eval('.modal-ticket', (els) => els.length);
   check('panel: entregar cantidad > 1 muestra esa cantidad de entradas en el modal', modalTicketCount3 === 3);
-  const emitidoAfterBatch = await page.textContent('#stat-emitido');
-  check('panel: stat emitido = 4 tras entregar 3 más', emitidoAfterBatch.trim() === '4');
+  const vendidasAfterBatch = await page.textContent('#stat-vendidas');
+  check('panel: stat vendidas = 4 tras entregar 3 más', vendidasAfterBatch.trim() === '4');
   await page.click('#btn-close-modal');
   await page.waitForTimeout(150);
 
   // "Ver entrada" per row in the list, and the WhatsApp share fallback
   // (headless Chromium has no navigator.share, so it should fall back to
-  // opening a wa.me link — stub window.open to check without actually
-  // navigating away).
+  // downloading just the ticket image — no caption/text anywhere — and
+  // opening a blank WhatsApp chat; stub window.open to check without
+  // actually navigating away, and listen for the download).
   await page.evaluate(() => { window.__openedUrls = []; window.open = (url) => { window.__openedUrls.push(url); return null; }; });
   check('panel: cada entrada emitida tiene botón "Ver entrada" en la lista', await page.isVisible('.btn-view-ticket'));
   check('panel: cada entrada emitida tiene botón de WhatsApp en la lista', await page.isVisible('.btn-share-whatsapp'));
@@ -265,10 +269,13 @@ async function main() {
   await page.click('#btn-close-modal');
   await page.waitForTimeout(150);
 
+  const downloadFilenames = [];
+  page.on('download', (d) => downloadFilenames.push(d.suggestedFilename()));
   await page.click('.btn-share-whatsapp');
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(500);
   const openedUrls = await page.evaluate(() => window.__openedUrls);
-  check('panel: compartir por WhatsApp abre un link de wa.me (fallback sin Web Share API)', openedUrls.length === 1 && openedUrls[0].indexOf('wa.me') !== -1);
+  check('panel: compartir por WhatsApp (sin Web Share API) abre WhatsApp sin ningún texto adjunto', openedUrls.length === 1 && openedUrls[0] === 'https://wa.me/');
+  check('panel: como no se puede adjuntar el archivo directamente, descarga sólo la imagen de la entrada', downloadFilenames.length === 1 && /^entrada-.+\.(png|jpg)$/.test(downloadFilenames[0]));
 
   // Cancel entrega
   await page.click('.btn-cancel-issue');
@@ -278,6 +285,21 @@ async function main() {
   await page.waitForTimeout(300);
   const disponibleStat = await page.textContent('#stat-disponible');
   check('panel: cancelar entrega devuelve el ticket al pool (disponible=7, tras entregar 4 y cancelar 1)', disponibleStat.trim() === '7');
+
+  // ---- Marcar una entrada como usada (simula un escaneo válido) y
+  // confirmar que el 4º contador del panel ("Usadas") lo refleja ----
+  const vendidaCode = await page.$eval('.ticket-card:has(.pill-emitido) .code', (el) => el.textContent.trim());
+  await page.evaluate((code) => fetch('/.netlify/functions/validate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: code }),
+  }), vendidaCode);
+  await page.click('#btn-refresh');
+  await page.waitForTimeout(300);
+  const usadasStat = await page.textContent('#stat-usadas');
+  check('panel: el contador "Usadas" sube al validar una entrada (escaneo simulado)', usadasStat.trim() === '1');
+  const vendidasAfterUse = await page.textContent('#stat-vendidas');
+  check('panel: el contador "Vendidas" baja en la misma cantidad', vendidasAfterUse.trim() === '2');
 
   // Search filter
   await page.fill('#search-code', 'ZZZZ-NOEXISTE');
@@ -408,6 +430,79 @@ async function main() {
     return { payload, decodedText: decoded ? decoded.data : null };
   });
   check('scanner: round-trip encode->decode de jsQR/qrcode-generator', roundTrip.decodedText === roundTrip.payload);
+
+  // ---- Scanner page: full green/red result screen + "Escanear siguiente"
+  // — fakes the camera with a canvas that keeps broadcasting a live QR via
+  // captureStream(), so the actual decode -> validate -> result pipeline
+  // runs exactly as it would on a phone, not just a one-off decode/encode.
+  await page.evaluate(() => {
+    window.__mockState.events.push({
+      id: 'scan-test-event',
+      name: 'Evento Scan',
+      tickets: [{ code: 'SCAN-OK-1', status: 'emitido', recipient: 'Operador Test', issuedAt: new Date().toISOString(), usedAt: null }],
+      createdAt: new Date(0).toISOString(),
+    });
+    window.__fakeQrText = null;
+    navigator.mediaDevices.getUserMedia = async function () {
+      const canvas = document.createElement('canvas');
+      canvas.width = 480;
+      canvas.height = 480;
+      const cctx = canvas.getContext('2d');
+      (function paint() {
+        cctx.fillStyle = '#ffffff';
+        cctx.fillRect(0, 0, 480, 480);
+        if (window.__fakeQrText && window.qrcode) {
+          const qr = window.qrcode(0, 'M');
+          qr.addData(window.__fakeQrText);
+          qr.make();
+          const count = qr.getModuleCount();
+          const cell = Math.floor(400 / count);
+          const margin = 40;
+          cctx.fillStyle = '#000000';
+          for (let r = 0; r < count; r++) {
+            for (let c = 0; c < count; c++) {
+              if (qr.isDark(r, c)) cctx.fillRect(margin + c * cell, margin + r * cell, cell, cell);
+            }
+          }
+        }
+        requestAnimationFrame(paint);
+      })();
+      return canvas.captureStream(15);
+    };
+    window.__fakeQrText = 'PU:SCAN-OK-1';
+  });
+
+  await page.click('#btn-start-camera');
+  await page.waitForTimeout(1500);
+  const validOverlayClass = (await page.getAttribute('#scan-result-overlay', 'class')) || '';
+  check('scanner: un código válido muestra la pantalla verde de resultado', validOverlayClass.indexOf('scan-result-overlay--valid') !== -1);
+  const validHeadline = (await page.textContent('#scan-result-headline')).trim();
+  check('scanner: la pantalla de éxito dice "Ingreso habilitado"', validHeadline === 'Ingreso habilitado');
+  check('scanner: aparece el botón "Escanear siguiente"', await page.isVisible('#btn-scan-next'));
+
+  // Blank out the fake QR first — the code is still "in frame" on a real
+  // camera would keep re-triggering a scan the instant scanning resumes,
+  // same as it would on a phone if you didn't move it away, so clear it to
+  // isolate "did the button close the screen" from "did it start scanning
+  // again".
+  await page.evaluate(() => { window.__fakeQrText = null; });
+  await page.click('#btn-scan-next');
+  await page.waitForTimeout(200);
+  check('scanner: "Escanear siguiente" cierra la pantalla de resultado', !(await page.isVisible('#scan-result-overlay')));
+
+  // Put the same (now already-used) code back in frame — the next
+  // automatic scan should land on the red error screen.
+  await page.evaluate(() => { window.__fakeQrText = 'PU:SCAN-OK-1'; });
+  await page.waitForTimeout(1500);
+  const errorOverlayClass = (await page.getAttribute('#scan-result-overlay', 'class')) || '';
+  check('scanner: reescanear un código ya usado muestra la pantalla roja de error', errorOverlayClass.indexOf('scan-result-overlay--error') !== -1);
+  const errorHeadline = (await page.textContent('#scan-result-headline')).trim();
+  check('scanner: la pantalla de error dice "Código ya utilizado"', errorHeadline === 'Código ya utilizado');
+
+  await page.evaluate(() => { window.__fakeQrText = null; });
+  await page.click('#btn-scan-next');
+  await page.waitForTimeout(200);
+  check('scanner: "Escanear siguiente" también cierra la pantalla de error', !(await page.isVisible('#scan-result-overlay')));
 
   await browser.close();
 
