@@ -47,6 +47,10 @@
   var modalTitle = document.getElementById('modal-title');
   var modalTicketsList = document.getElementById('modal-tickets-list');
   var btnCloseModal = document.getElementById('btn-close-modal');
+  var btnShareAll = document.getElementById('btn-share-all');
+  // Tickets currently listed in the modal, so "Compartir todas" shares
+  // exactly what the user is looking at (a fresh batch or "Ver entrada").
+  var modalTickets = [];
 
   var confirmModal = document.getElementById('confirm-modal');
   var confirmTitle = document.getElementById('confirm-title');
@@ -400,6 +404,63 @@
       }
     });
   }
+
+  // Shares a whole batch in one go: every ticket image is attached to a
+  // single native share sheet, so WhatsApp receives them together in one
+  // message. Without file sharing (mostly desktop) it downloads all the
+  // images and opens WhatsApp so they can be attached at once.
+  function shareAllViaWhatsApp(tickets) {
+    if (!tickets || !tickets.length) return;
+    btnShareAll.disabled = true;
+    var originalLabel = btnShareAll.textContent;
+    btnShareAll.textContent = 'Preparando ' + tickets.length + ' entradas…';
+
+    Promise.all(tickets.map(function (t) { return ticketImageBlob(t); }))
+      .then(function (blobs) {
+        var files = [];
+        blobs.forEach(function (blob, i) {
+          if (!blob || typeof File !== 'function') return;
+          var ext = blob.type === 'image/jpeg' ? '.jpg' : '.png';
+          try { files.push(new File([blob], 'entrada-' + tickets[i].code + ext, { type: blob.type || 'image/png' })); } catch (e) { /* skip */ }
+        });
+
+        function fallbackDownloadAll() {
+          blobs.forEach(function (blob, i) {
+            if (!blob) return;
+            setTimeout(function () {
+              var url = URL.createObjectURL(blob);
+              var a = document.createElement('a');
+              a.href = url;
+              a.download = 'entrada-' + tickets[i].code + (blob.type === 'image/jpeg' ? '.jpg' : '.png');
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+            }, i * 350);
+          });
+          toast('Se descargaron ' + tickets.length + ' imágenes — adjuntalas en WhatsApp.');
+          window.open('https://wa.me/', '_blank');
+        }
+
+        if (files.length === tickets.length && navigator.canShare && navigator.canShare({ files: files })) {
+          return navigator.share({ files: files }).catch(function (err) {
+            if (!err || err.name !== 'AbortError') fallbackDownloadAll();
+          });
+        }
+        fallbackDownloadAll();
+      })
+      .catch(function () {
+        toast('No se pudieron preparar las entradas.');
+      })
+      .finally(function () {
+        btnShareAll.disabled = false;
+        btnShareAll.textContent = originalLabel;
+      });
+  }
+
+  btnShareAll.addEventListener('click', function () {
+    shareAllViaWhatsApp(modalTickets);
+  });
 
   // ---- Event picker ----
   function renderEventOptions() {
@@ -881,6 +942,8 @@
     opts = opts || {};
     var list = Array.isArray(tickets) ? tickets : [tickets];
     var useComposite = !!currentEvent.hasImage;
+    modalTickets = list;
+    btnShareAll.hidden = list.length < 2;
     modalTitle.textContent = opts.title || 'Entrada';
     modalTicketsList.innerHTML = list.map(function (t) {
       if (useComposite) {
