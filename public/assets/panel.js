@@ -261,10 +261,76 @@
     ctx.closePath();
   }
 
+  // Looks for a big white rectangle in the uploaded background (a "slot"
+  // the designer left for the QR). If the image has one, the QR is drawn
+  // INSIDE it instead of on a separate card, so it never spills outside the
+  // artwork. Works on a quarter-size copy for speed and caches the result
+  // on the image object. Returns {x, y, w, h} in card coordinates, or null
+  // when the image has no such slot (then the default card is used).
+  function detectQrSlot(bgImg) {
+    if (bgImg.__qrSlot !== undefined) return bgImg.__qrSlot;
+    var slot = null;
+    try {
+      var S = 4;
+      var w = CARD_W / S;
+      var h = CARD_H / S;
+      var c = document.createElement('canvas');
+      c.width = w;
+      c.height = h;
+      var cctx = c.getContext('2d');
+      var scale = Math.max(w / bgImg.naturalWidth, h / bgImg.naturalHeight);
+      var dw = bgImg.naturalWidth * scale;
+      var dh = bgImg.naturalHeight * scale;
+      cctx.drawImage(bgImg, (w - dw) / 2, (h - dh) / 2, dw, dh);
+      var data = cctx.getImageData(0, 0, w, h).data;
+
+      // Longest run of (nearly) white pixels on each row.
+      var minRun = w * 0.25;
+      var rowRun = [];
+      for (var y = 0; y < h; y++) {
+        var best = 0, bestEnd = 0, cur = 0;
+        for (var x = 0; x < w; x++) {
+          var i = (y * w + x) * 4;
+          if (data[i] >= 240 && data[i + 1] >= 240 && data[i + 2] >= 240 && data[i + 3] > 200) {
+            cur++;
+            if (cur > best) { best = cur; bestEnd = x; }
+          } else {
+            cur = 0;
+          }
+        }
+        rowRun.push({ len: best, end: bestEnd });
+      }
+
+      // Tallest band of consecutive rows that contain such a run.
+      var bandStart = -1, bestStart = 0, bestLen = 0;
+      for (var yy = 0; yy <= h; yy++) {
+        var ok = yy < h && rowRun[yy].len >= minRun;
+        if (ok && bandStart < 0) bandStart = yy;
+        if (!ok && bandStart >= 0) {
+          if (yy - bandStart > bestLen) { bestLen = yy - bandStart; bestStart = bandStart; }
+          bandStart = -1;
+        }
+      }
+      if (bestLen >= h * 0.1) {
+        var mid = rowRun[bestStart + Math.floor(bestLen / 2)];
+        slot = {
+          x: (mid.end - mid.len + 1) * S,
+          y: bestStart * S,
+          w: mid.len * S,
+          h: bestLen * S,
+        };
+      }
+    } catch (e) {
+      slot = null;
+    }
+    bgImg.__qrSlot = slot;
+    return slot;
+  }
+
   // Draws the event's background image "cover"-fit into a 1080x1920 canvas,
-  // then a white rounded card near the bottom holding the QR and — the only
-  // text on the whole card — the ticket number underneath it, so the result
-  // reads as a clean access pass without extra clutter.
+  // then puts the QR and — the only text on the card — the ticket number
+  // underneath it. If the image has a white slot for the QR it goes inside
+  // that slot; otherwise a white rounded card is drawn near the bottom.
   function drawTicketCard(canvas, bgImg, ticket) {
     canvas.width = CARD_W;
     canvas.height = CARD_H;
@@ -276,6 +342,21 @@
     var dx = (CARD_W - dw) / 2;
     var dy = (CARD_H - dh) / 2;
     ctx.drawImage(bgImg, dx, dy, dw, dh);
+
+    var slot = detectQrSlot(bgImg);
+    if (slot) {
+      var sPad = Math.round(Math.min(slot.w, slot.h) * 0.06);
+      var textH = 60;
+      var sQr = Math.floor(Math.min(slot.w - sPad * 2, slot.h - sPad * 2 - textH));
+      var sQrX = slot.x + (slot.w - sQr) / 2;
+      var sQrY = slot.y + sPad;
+      drawQRModules(ctx, QR_PREFIX + ticket.code, sQrX, sQrY, sQr);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#181325';
+      ctx.font = '600 34px "IBM Plex Mono", monospace';
+      ctx.fillText(ticket.code, slot.x + slot.w / 2, sQrY + sQr + 46);
+      return;
+    }
 
     var padding = 40;
     var qrSize = 480;
