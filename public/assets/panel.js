@@ -29,6 +29,7 @@
   var securityCard = document.getElementById('security-card');
   var btnLogout = document.getElementById('btn-logout');
 
+  var generateCard = document.getElementById('generate-card');
   var generateTitle = document.getElementById('generate-title');
   var labelEventName = document.getElementById('label-event-name');
   var inputEventName = document.getElementById('input-event-name');
@@ -603,16 +604,14 @@
     dispenseCard.hidden = isNew;
     poolCard.hidden = isNew;
     imageCard.hidden = isNew;
+    // Agregar códigos a un evento existente se hace desde "Editar" (aforo).
+    generateCard.hidden = !isNew;
     noEventsHint.hidden = !(isNew && events.length === 0);
     if (isNew) {
       generateTitle.textContent = 'Crear evento';
       labelEventName.textContent = 'Nombre del evento';
       btnGenerate.textContent = 'Crear evento y generar lote';
       soldOutBanner.hidden = true;
-    } else {
-      generateTitle.textContent = 'Agregar códigos';
-      labelEventName.textContent = 'Renombrar evento (opcional)';
-      btnGenerate.textContent = 'Agregar códigos';
     }
   }
 
