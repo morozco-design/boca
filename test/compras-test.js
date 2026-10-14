@@ -57,6 +57,8 @@ const createOrder = fn('create-order');
 const webhook = fn('mp-webhook');
 const orderStatus = fn('order-status');
 const validate = fn('validate');
+const editEvent = fn('edit-event');
+const adminAuth = fn('admin-auth');
 
 let pass = 0;
 let fail = 0;
@@ -485,6 +487,49 @@ async function main() {
     approvePayment('9001', r.data.orderId, 450 * 8);
     await hook(9001);
     assert.strictEqual(count(await eventTickets(eid), 'emitido'), 8);
+  });
+
+  await test('editar evento: cambia nombre y aforo (sube y baja sin tocar entradas vendidas)', async () => {
+    const eid = await newEvent('Para editar', 10);
+    setEvent(eid);
+    const r = await call(createOrder, 'POST', { body: buyer({ name: 'Edi', email: 'edi@example.com', quantity: 3 }) });
+    assert.strictEqual(r.status, 200);
+    approvePayment('9101', r.data.orderId, 450 * 3);
+    await hook(9101);
+    // Nombre + subir aforo a 15.
+    const up = await call(editEvent, 'POST', { body: { eventId: eid, name: 'Nombre nuevo', capacity: 15 } });
+    assert.strictEqual(up.status, 200, JSON.stringify(up.data));
+    assert.strictEqual(up.data.event.name, 'Nombre nuevo');
+    assert.strictEqual(up.data.event.tickets.length, 15);
+    assert.strictEqual(count(up.data.event.tickets, 'emitido'), 3);
+    // Bajar a 5: se quitan solo disponibles.
+    const down = await call(editEvent, 'POST', { body: { eventId: eid, capacity: 5 } });
+    assert.strictEqual(down.status, 200);
+    assert.strictEqual(down.data.event.tickets.length, 5);
+    assert.strictEqual(count(down.data.event.tickets, 'emitido'), 3);
+    // Menos que lo vendido: se rechaza.
+    const bad = await call(editEvent, 'POST', { body: { eventId: eid, capacity: 2 } });
+    assert.strictEqual(bad.status, 409);
+    assert.strictEqual(bad.data.error, 'capacity_below_sold');
+    // Entradas inválidas.
+    assert.strictEqual((await call(editEvent, 'POST', { body: { eventId: eid, capacity: 0 } })).status, 400);
+    assert.strictEqual((await call(editEvent, 'POST', { body: { eventId: eid, name: '  ' } })).status, 400);
+    assert.strictEqual((await call(editEvent, 'POST', { body: { eventId: 'nope', name: 'x' } })).status, 404);
+    // El nombre nuevo se ve en la venta.
+    assert.ok((await call(saleInfo, 'GET')).data.events.some((e) => e.name === 'Nombre nuevo'));
+  });
+
+  await test('contraseña del panel (ADMIN_PASSCODE de Netlify): pantalla de acceso, login y rutas protegidas', async () => {
+    assert.strictEqual((await call(adminAuth, 'GET')).data.protected, false);
+    process.env.ADMIN_PASSCODE = 'de-netlify';
+    assert.strictEqual((await call(adminAuth, 'GET')).data.protected, true);
+    assert.strictEqual((await call(adminAuth, 'POST', { body: { action: 'login' } })).status, 401);
+    assert.strictEqual((await call(adminAuth, 'POST', { body: { action: 'login' }, headers: { 'x-admin-passcode': 'mala' } })).status, 401);
+    assert.strictEqual((await call(adminAuth, 'POST', { body: { action: 'login' }, headers: { 'x-admin-passcode': 'de-netlify' } })).status, 200);
+    assert.strictEqual((await call(editEvent, 'POST', { body: { eventId: 'x', name: 'y' } })).status, 401);
+    assert.strictEqual((await call(saleInfo, 'GET')).status, 200);
+    delete process.env.ADMIN_PASSCODE;
+    assert.strictEqual((await call(stateFn, 'GET')).status, 200);
   });
 
   console.log('\n' + pass + ' pasaron, ' + fail + ' fallaron');

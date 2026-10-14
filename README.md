@@ -285,7 +285,7 @@ En Netlify → *Site configuration → Environment variables*:
 | `MP_WEBHOOK_SECRET` | Clave secreta del webhook (ver abajo). Recomendada. |
 | `GMAIL_USER` | La casilla de Gmail desde la que salen las entradas. |
 | `GMAIL_APP_PASSWORD` | Contraseña de aplicación de esa cuenta (ver abajo). |
-| `ADMIN_PASSCODE` | **Clave del panel.** Imprescindible antes de abrir la venta. |
+| `ADMIN_PASSCODE` | **Contraseña del panel.** Se administra solo acá: para cambiarla editá la variable y hacé un redeploy; para quitarla, borrala. Imprescindible antes de abrir la venta. |
 | `SALE_OPEN` | Opcional: `false` cierra la venta sin borrar nada. |
 | `MAX_PER_ORDER`, `RESERVE_MINUTES` | Opcionales: máximo de entradas por compra (8) y minutos de reserva (15). No hay límite por persona. |
 | `MAIL_FROM_NAME` | Opcional: nombre del remitente en el mail. |
@@ -316,10 +316,10 @@ creá una y pegala (los 16 caracteres, con o sin espacios) en
 ## Seguridad: la clave del panel
 
 Con la venta pública, las funciones de administración (`state`, `generate`,
-`dispense`, `cancel`, `delete-event`, subir/quitar imagen) **no pueden quedar
+`dispense`, `cancel`, `delete-event`, `edit-event`, subir/quitar imagen) **no pueden quedar
 abiertas**: cualquiera que conozca su dirección podría ver los códigos o
-regalarse entradas. Definí `ADMIN_PASSCODE`: el panel la pide una vez por
-sesión del navegador. Las páginas públicas (`comprar`, `entrada`, escaneo)
+regalarse entradas. Definí `ADMIN_PASSCODE`: el panel muestra una pantalla de acceso y
+recuerda la clave mientras la pestaña esté abierta. Las páginas públicas (`comprar`, `entrada`, escaneo)
 no la necesitan. No uses la *Password protection* de Netlify para esto:
 protege el sitio entero y los compradores tampoco podrían entrar.
 

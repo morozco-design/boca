@@ -15,6 +15,19 @@
   var selectEvent = document.getElementById('select-event');
   var btnDeleteEvent = document.getElementById('btn-delete-event');
   var noEventsHint = document.getElementById('no-events-hint');
+  var btnEditEvent = document.getElementById('btn-edit-event');
+  var panelView = document.getElementById('panel-view');
+  var loginOverlay = document.getElementById('login-overlay');
+  var loginForm = document.getElementById('login-form');
+  var loginPassword = document.getElementById('login-password');
+  var loginError = document.getElementById('login-error');
+  var editModal = document.getElementById('edit-modal');
+  var editForm = document.getElementById('edit-form');
+  var editName = document.getElementById('edit-name');
+  var editCapacity = document.getElementById('edit-capacity');
+  var editHint = document.getElementById('edit-hint');
+  var securityCard = document.getElementById('security-card');
+  var btnLogout = document.getElementById('btn-logout');
 
   var generateTitle = document.getElementById('generate-title');
   var labelEventName = document.getElementById('label-event-name');
@@ -117,12 +130,10 @@
       body: body ? JSON.stringify(body) : undefined,
     }).then(function (res) {
       return res.json().then(function (data) {
-        if (res.status === 401 && !retried) {
-          var entered = window.prompt(passcode ? 'La clave no es correcta. Ingresala de nuevo:' : 'Ingresá la clave de administrador:');
-          if (entered) {
-            storePasscode(entered.trim());
-            return api(path, method, body, query, true);
-          }
+        if (res.status === 401) {
+          // La clave no sirve (o cambió): se vuelve a pedir en la pantalla de acceso.
+          storePasscode('');
+          showLogin(passcode ? 'La contraseña ya no es válida. Ingresala de nuevo.' : '');
         }
         return { status: res.status, data: data };
       });
@@ -587,6 +598,7 @@
   function syncVisibility() {
     var isNew = isNewMode();
     btnDeleteEvent.hidden = isNew;
+    btnEditEvent.hidden = isNew;
     statsRow.hidden = isNew;
     dispenseCard.hidden = isNew;
     poolCard.hidden = isNew;
@@ -1118,6 +1130,110 @@
     }, 80);
   });
 
+  // ---- Editar evento (nombre y aforo) ----
+  function openEdit() {
+    var ev = events.find(function (e) { return e.id === currentEventId; });
+    if (!ev) return;
+    var tickets = currentEvent.tickets || [];
+    var locked = tickets.filter(function (t) { return t.status !== 'disponible'; }).length;
+    editName.value = ev.name;
+    editCapacity.value = String(tickets.length || (ev.stats && ev.stats.total) || 1);
+    editCapacity.min = String(Math.max(1, locked));
+    editHint.textContent = locked > 0
+      ? 'No se puede bajar de ' + locked + ' porque ya hay ' + locked + ' entradas reservadas, entregadas o usadas. Al subir el aforo se agregan códigos nuevos; al bajarlo se quitan solo códigos disponibles.'
+      : 'Al subir el aforo se agregan códigos nuevos; al bajarlo se quitan códigos disponibles.';
+    editModal.hidden = false;
+    editName.focus();
+  }
+  btnEditEvent.addEventListener('click', openEdit);
+  document.getElementById('btn-edit-cancel').addEventListener('click', function () { editModal.hidden = true; });
+  editForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var name = editName.value.trim();
+    var cap = parseInt(editCapacity.value, 10);
+    if (!name) { toast('Poné un nombre para el evento.'); return; }
+    if (!(cap >= 1)) { toast('Ingresá un aforo válido.'); return; }
+    api('edit-event', 'POST', { eventId: currentEventId, name: name, capacity: cap }).then(function (result) {
+      if (result.data && result.data.ok) {
+        editModal.hidden = true;
+        currentEvent = result.data.event;
+        events = result.data.events || events;
+        renderEventOptions();
+        refreshDerivedUI();
+        renderPoolView();
+        toast('Evento actualizado.');
+      } else if (!resyncIfEventMissing(result) && result.status !== 401) {
+        toast((result.data && result.data.message) || 'No se pudo guardar los cambios.');
+      }
+    }).catch(function () { toast('Sin conexión con el servidor.'); });
+  });
+
+  // ---- Acceso y contraseña del panel ----
+  function showLogin(msg) {
+    panelView.hidden = true;
+    loginOverlay.hidden = false;
+    loginError.hidden = !msg;
+    loginError.textContent = msg || '';
+    loginPassword.value = '';
+    loginPassword.focus();
+  }
+
+  function renderSecurity(info) {
+    securityCard.hidden = !info.protected;
+  }
+
+  function enterPanel(info) {
+    loginOverlay.hidden = true;
+    panelView.hidden = false;
+    renderSecurity(info);
+    loadEvents();
+  }
+
+  function tryLogin(pass) {
+    var headers = { 'Content-Type': 'application/json' };
+    if (pass) headers['x-admin-passcode'] = pass;
+    return fetch('/.netlify/functions/admin-auth', { method: 'POST', headers: headers, body: JSON.stringify({ action: 'login' }) })
+      .then(function (res) { return res.json().then(function (data) { return { status: res.status, data: data }; }); });
+  }
+
+  loginForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var pass = loginPassword.value;
+    if (!pass) return;
+    tryLogin(pass).then(function (r) {
+      if (r.status === 200 && r.data.ok) {
+        storePasscode(pass);
+        enterPanel(r.data);
+      } else {
+        loginError.hidden = false;
+        loginError.textContent = 'Contraseña incorrecta.';
+        loginPassword.value = '';
+        loginPassword.focus();
+      }
+    }).catch(function () {
+      loginError.hidden = false;
+      loginError.textContent = 'No se pudo conectar con el servidor.';
+    });
+  });
+
+  btnLogout.addEventListener('click', function () {
+    storePasscode('');
+    showLogin('');
+  });
+
   // ---- Boot ----
-  loadEvents();
+  fetch('/.netlify/functions/admin-auth').then(function (res) { return res.json(); }).then(function (info) {
+    if (!info || !info.ok) throw new Error('auth');
+    if (!info.protected) { enterPanel(info); return; }
+    var saved = readPasscode();
+    if (!saved) { showLogin(''); return; }
+    tryLogin(saved).then(function (r) {
+      if (r.status === 200 && r.data.ok) enterPanel(r.data);
+      else { storePasscode(''); showLogin(''); }
+    });
+  }).catch(function () {
+    // Si no se puede consultar, se muestra el panel y se ve el error normal.
+    panelView.hidden = false;
+    loadEvents();
+  });
 })();

@@ -11,7 +11,7 @@
 </head>
 <body>
 
-<div id="panel-view" class="wrap">
+<div id="panel-view" class="wrap" hidden>
   <div class="brand">
     <h1>Pase Único</h1>
     <span class="tag">panel de administración</span>
@@ -21,7 +21,10 @@
     <h2>Evento</h2>
     <label for="select-event">Evento actual</label>
     <select id="select-event"></select>
-    <button class="btn btn-danger btn-small" id="btn-delete-event" type="button" hidden>Eliminar este evento</button>
+    <div class="action-row">
+      <button class="btn btn-secondary btn-small" id="btn-edit-event" type="button" hidden>Editar</button>
+      <button class="btn btn-danger btn-small" id="btn-delete-event" type="button" hidden>Eliminar este evento</button>
+    </div>
     <p class="hint" id="no-events-hint" hidden>Todavía no creaste ningún evento. Completá "Crear evento" abajo para generar el primer lote.</p>
   </div>
 
@@ -84,6 +87,37 @@
     <div id="pool-view"></div>
     <p class="hint" id="empty-pool-hint" hidden>Todavía no generaste ningún código.</p>
   </div>
+
+  <div class="card" id="security-card" hidden>
+    <h2>Acceso al panel</h2>
+    <p class="hint hint-left">El panel está protegido con contraseña. Se administra en Netlify, con la variable ADMIN_PASSCODE.</p>
+    <button class="btn btn-secondary btn-small" id="btn-logout" type="button">Cerrar sesión</button>
+  </div>
+</div>
+
+<div id="login-overlay" class="modal-overlay" hidden>
+  <form class="modal-card" id="login-form">
+    <h3>Panel protegido</h3>
+    <p>Ingresá la contraseña para continuar.</p>
+    <input type="password" id="login-password" autocomplete="current-password" placeholder="Contraseña">
+    <p class="hint" id="login-error" hidden style="color:var(--bad);"></p>
+    <button class="btn" type="submit">Entrar</button>
+  </form>
+</div>
+
+<div id="edit-modal" class="modal-overlay" hidden>
+  <form class="modal-card" id="edit-form">
+    <h3>Editar evento</h3>
+    <label for="edit-name">Nombre del evento</label>
+    <input type="text" id="edit-name" maxlength="120" autocomplete="off">
+    <label for="edit-capacity">Aforo (cantidad total de entradas)</label>
+    <input type="number" id="edit-capacity" min="1" max="5000" step="1" inputmode="numeric">
+    <p class="hint hint-left" id="edit-hint"></p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="btn-edit-cancel" type="button">Cancelar</button>
+      <button class="btn" type="submit">Guardar</button>
+    </div>
+  </form>
 </div>
 
 <div id="dispense-modal" class="modal-overlay" hidden>

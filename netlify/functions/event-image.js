@@ -58,7 +58,8 @@ exports.handler = async (event) => {
   // same admin gate as generate/dispense/cancel/delete-event (currently a
   // no-op — the panel has no passcode — but kept for consistency and in
   // case that ever changes).
-  if (!isAdminAuthorized(event)) {
+  initFromEvent(event);
+  if (!(await isAdminAuthorized(event))) {
     return json(401, { ok: false, error: 'unauthorized' });
   }
 

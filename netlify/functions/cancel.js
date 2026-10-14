@@ -9,7 +9,8 @@ exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return json(405, { ok: false, error: 'method_not_allowed' });
   }
-  if (!isAdminAuthorized(event)) {
+  initFromEvent(event);
+  if (!(await isAdminAuthorized(event))) {
     return json(401, { ok: false, error: 'unauthorized' });
   }
   initFromEvent(event);
