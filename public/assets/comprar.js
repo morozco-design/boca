@@ -25,9 +25,14 @@
     return null;
   }
 
+  function maxQty(ev) {
+    return Math.max(1, Math.min(info.max, ev.available));
+  }
+
   function updateTotal() {
     if (!info) return;
-    var qty = parseInt($('buyer-qty').value, 10) || 1;
+    var qty = parseInt($('buyer-qty').value, 10);
+    if (!(qty >= 1)) qty = 1;
     $('total-line').textContent = money(info.price * qty);
   }
 
@@ -52,15 +57,16 @@
       ? 'Quedan ' + ev.available + ' entradas'
       : 'Entradas disponibles';
 
-    var max = Math.max(1, Math.min(info.max, ev.available));
-    var sel = $('buyer-qty');
-    sel.innerHTML = '';
-    for (var i = 1; i <= max; i++) {
+    // Hasta 8 por compra (o las que queden).
+    var qtyInput = $('buyer-qty');
+    var prev = parseInt(qtyInput.value, 10) || 1;
+    qtyInput.innerHTML = '';
+    for (var i = 1; i <= maxQty(ev); i++) {
       var o = document.createElement('option');
-      o.value = String(i);
-      o.textContent = String(i);
-      sel.appendChild(o);
+      o.value = String(i); o.textContent = String(i);
+      qtyInput.appendChild(o);
     }
+    qtyInput.value = String(Math.min(prev, maxQty(ev)));
     updateTotal();
   }
 
@@ -70,7 +76,7 @@
     if (info.events.every(function (e) { return e.soldOut; })) { show('soldout-card', true); return; }
 
     $('price-line').textContent = money(info.price) + ' por entrada';
-    $('reserve-note').textContent = 'Máximo ' + info.max + ' entradas por persona. Se reservan unos minutos mientras pagás. Al terminar te mandamos las entradas por mail.';
+    $('reserve-note').textContent = 'Se reservan unos minutos mientras pagás. Al terminar te mandamos las entradas por mail.';
 
     var sel = $('event-select');
     sel.innerHTML = '';
@@ -109,7 +115,13 @@
   }
 
   $('event-select').addEventListener('change', onEventChange);
-  $('buyer-qty').addEventListener('change', updateTotal);
+  $('buyer-qty').addEventListener('input', updateTotal);
+  $('buyer-qty').addEventListener('change', function () {
+    var ev = selectedEvent();
+    var n = parseInt($('buyer-qty').value, 10);
+    if (ev && (!(n >= 1) || n > maxQty(ev))) $('buyer-qty').value = String(!(n >= 1) ? 1 : maxQty(ev));
+    updateTotal();
+  });
 
   $('buy-form').addEventListener('submit', function (e) {
     e.preventDefault();
@@ -119,6 +131,7 @@
     var qty = parseInt($('buyer-qty').value, 10);
     if (!ev) { banner('Elegí un evento.'); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { banner('Ingresá un mail válido.'); $('buyer-email').focus(); return; }
+    if (!(qty >= 1) || qty > maxQty(ev)) { banner('Ingresá una cantidad entre 1 y ' + maxQty(ev) + '.'); $('buyer-qty').focus(); return; }
 
     var btn = $('btn-pay');
     btn.disabled = true;
@@ -134,7 +147,10 @@
           window.location.href = data.checkoutUrl;
           return;
         }
-        banner((data && data.message) || 'No se pudo iniciar el pago. Probá de nuevo.');
+        var msg = (data && data.message) || 'No se pudo iniciar el pago. Probá de nuevo.';
+        // Con ?debug=1 se muestra el detalle técnico (solo para diagnosticar).
+        if (data && data.debug && /[?&]debug=1/.test(window.location.search)) msg += ' [detalle: ' + JSON.stringify(data.debug) + ']';
+        banner(msg);
         if (data && (data.error === 'sold_out' || data.error === 'event_not_found')) load(true);
         btn.disabled = false;
         btn.textContent = 'Pagar con Mercado Pago';

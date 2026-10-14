@@ -167,7 +167,7 @@ function getImageBlobStore() {
 }
 
 // Pedidos de compra online (uno por compra) y el índice de compradores que
-// hace cumplir el máximo de entradas por persona. Van en su propio store
+// guardaba el máximo por persona (ya no se usa). Van en su propio store
 // para no engordar el blob principal de tickets.
 function getOrdersStore() {
   return getStore({ name: ORDERS_STORE_NAME, ...manualBlobsOptions() });

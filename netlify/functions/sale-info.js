@@ -7,7 +7,7 @@ const { countAvailable } = require('./_lib/reservations');
 
 // PÚBLICO. Lo que necesita la página de compra: los eventos creados en el
 // panel (con entradas generadas), cuántas quedan de cada uno, el precio fijo
-// y el máximo por persona. Nunca devuelve códigos.
+// y el tope técnico por compra. Nunca devuelve códigos.
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return noContent();
   if (event.httpMethod !== 'GET') return json(405, { ok: false, error: 'method_not_allowed' });

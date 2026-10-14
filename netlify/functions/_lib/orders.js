@@ -1,17 +1,8 @@
 'use strict';
 
-const crypto = require('crypto');
 const { getOrdersStore } = require('./store');
 
 const MAX_RETRIES = 8;
-
-class QuotaExceeded extends Error {
-  constructor(remaining) {
-    super('quota_exceeded');
-    this.code = 'quota_exceeded';
-    this.remaining = remaining;
-  }
-}
 
 // Lee-modifica-escribe con control de concurrencia optimista (ETag), igual
 // que el resto del sistema. `mutator(current|null)` devuelve el valor nuevo,
@@ -61,57 +52,10 @@ async function updateOrder(id, mutator) {
   });
 }
 
-// ---- Máximo de entradas por persona -------------------------------------
-// Se lleva un índice por mail (hash) con los pedidos que cuentan: los pagados
-// y los pendientes que todavía no vencieron. Es un freno razonable, no un
-// control de identidad: alguien con varios mails distintos puede saltearlo.
-
-function buyerKey(email) {
-  const h = crypto.createHash('sha256').update(String(email).trim().toLowerCase()).digest('hex');
-  return 'buyer-' + h.slice(0, 32);
-}
-
-function liveEntries(entries, nowMs) {
-  return (entries || []).filter((e) => e.paid || Date.parse(e.until) > nowMs);
-}
-
-async function reserveBuyerQuota(email, orderId, quantity, untilIso, max, nowMs) {
-  await casUpdate(getOrdersStore(), buyerKey(email), (current) => {
-    const entries = liveEntries(current && current.entries, nowMs);
-    const used = entries.reduce((sum, e) => sum + e.qty, 0);
-    if (used + quantity > max) throw new QuotaExceeded(Math.max(0, max - used));
-    entries.push({ orderId, qty: quantity, until: untilIso, paid: false });
-    return { entries };
-  });
-}
-
-async function releaseBuyerQuota(email, orderId) {
-  await casUpdate(getOrdersStore(), buyerKey(email), (current) => {
-    if (!current) return undefined;
-    return { entries: current.entries.filter((e) => e.orderId !== orderId) };
-  });
-}
-
-async function markBuyerPaid(email, orderId) {
-  await casUpdate(getOrdersStore(), buyerKey(email), (current) => {
-    if (!current) return undefined;
-    let changed = false;
-    const entries = current.entries.map((e) => {
-      if (e.orderId === orderId && !e.paid) { changed = true; return Object.assign({}, e, { paid: true }); }
-      return e;
-    });
-    return changed ? { entries } : undefined;
-  });
-}
-
 module.exports = {
   casUpdate,
   getOrder,
   createOrder,
   updateOrder,
   isValidOrderId,
-  reserveBuyerQuota,
-  releaseBuyerQuota,
-  markBuyerPaid,
-  QuotaExceeded,
 };

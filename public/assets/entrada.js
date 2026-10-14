@@ -71,7 +71,8 @@
 
   function poll() {
     var url = '/.netlify/functions/order-status?id=' + encodeURIComponent(orderId) +
-      (paymentId ? '&payment_id=' + encodeURIComponent(paymentId) : '');
+      (paymentId ? '&payment_id=' + encodeURIComponent(paymentId) : '') +
+      (/[?&]debug=1/.test(window.location.search) ? '&debug=1' : '');
     fetch(url)
       .then(function (r) { return r.json().then(function (d) { return { status: r.status, data: d }; }); })
       .then(function (res) {
@@ -87,6 +88,9 @@
             (data.codes.length === 1 ? 'Esta es tu entrada. ' : 'Estas son tus ' + data.codes.length + ' entradas. ') +
             (data.emailSent ? 'También te las mandamos por mail.' : 'En unos minutos te llegan también por mail.') +
             ' Mostrá el QR en la puerta: cada una se valida una sola vez.', false);
+          if (/[?&]debug=1/.test(window.location.search)) {
+            $('status-text').textContent += ' [mail: ' + (data.emailSent ? 'enviado' : 'NO enviado' + (data.emailError ? ' — ' + data.emailError : '')) + ']';
+          }
           renderPasses(data);
           return;
         }

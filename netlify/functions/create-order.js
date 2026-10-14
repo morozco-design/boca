@@ -11,7 +11,7 @@ const {
   randomId,
 } = require('./_lib/store');
 const { reserveTickets, releaseOrder, countAvailable, resolveSaleEvent } = require('./_lib/reservations');
-const { createOrder, updateOrder, reserveBuyerQuota, releaseBuyerQuota, QuotaExceeded } = require('./_lib/orders');
+const { createOrder, updateOrder } = require('./_lib/orders');
 const mp = require('./_lib/mp');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -38,7 +38,7 @@ exports.handler = async (event) => {
   if (name.length > 80) return json(400, { ok: false, error: 'invalid_name', message: 'El nombre es demasiado largo.' });
   if (!EMAIL_RE.test(email) || email.length > 120) return json(400, { ok: false, error: 'invalid_email', message: 'Ingresá un mail válido.' });
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > cfg.max) {
-    return json(400, { ok: false, error: 'invalid_quantity', message: 'Podés comprar entre 1 y ' + cfg.max + ' entradas.' });
+    return json(400, { ok: false, error: 'invalid_quantity', message: 'Ingresá una cantidad válida (entre 1 y ' + cfg.max + ').' });
   }
 
   const nowMs = Date.now();
@@ -46,16 +46,11 @@ exports.handler = async (event) => {
   const untilIso = new Date(untilMs).toISOString();
   const orderId = randomId();
   const site = siteUrl(event);
-  let buyerReserved = false;
   let ticketsReserved = false;
   let eventName = '';
   let saleEventId = null;
 
   try {
-    // Tope por persona.
-    await reserveBuyerQuota(email, orderId, quantity, untilIso, cfg.max, nowMs);
-    buyerReserved = true;
-
     // Apartar las entradas.
     let codes = null;
     let availableNow = 0;
@@ -74,11 +69,9 @@ exports.handler = async (event) => {
       });
     } catch (err) {
       if (err instanceof MutationRejected && err.code === 'event_not_found') {
-        await releaseBuyerQuota(email, orderId);
         return json(409, { ok: false, error: 'event_not_found', message: 'Ese evento ya no está a la venta.' });
       }
       if (err instanceof MutationRejected && err.code === 'sold_out') {
-        await releaseBuyerQuota(email, orderId);
         return json(409, {
           ok: false,
           error: 'sold_out',
@@ -147,7 +140,6 @@ exports.handler = async (event) => {
           return state;
         });
       }
-      if (buyerReserved) await releaseBuyerQuota(email, orderId);
       if (ticketsReserved) {
         await updateOrder(orderId, (o) => {
           o.status = 'fallido';
@@ -159,19 +151,23 @@ exports.handler = async (event) => {
       console.error('[compras] no se pudo liberar la reserva de ' + orderId + ':', cleanupErr && cleanupErr.message);
     }
 
-    if (err instanceof QuotaExceeded) {
-      return json(409, {
-        ok: false,
-        error: 'quota_exceeded',
-        remaining: err.remaining,
-        message: err.remaining > 0
-          ? 'Con este mail solo podés comprar ' + err.remaining + ' entrada(s) más.'
-          : 'Con este mail ya llegaste al máximo de ' + cfg.max + ' entradas.',
-      });
-    }
     if (err instanceof mp.MpError) {
       console.error('[compras] error de Mercado Pago:', err.status, JSON.stringify(err.detail));
-      return json(502, { ok: false, error: 'payment_provider_error', message: 'No se pudo iniciar el pago. Probá de nuevo en un momento.' });
+      // `debug` no lleva ningún dato secreto (nunca el token): solo lo que
+      // respondió Mercado Pago, para poder diagnosticar. La página lo muestra
+      // únicamente si se abre con ?debug=1.
+      const detail = err.detail || {};
+      return json(502, {
+        ok: false,
+        error: 'payment_provider_error',
+        message: 'No se pudo iniciar el pago. Probá de nuevo en un momento.',
+        debug: {
+          status: err.status || null,
+          message: err.message,
+          mercadopago: detail.message || detail.error || null,
+          cause: Array.isArray(detail.cause) ? detail.cause.map((c) => c && (c.description || c.code)).filter(Boolean) : null,
+        },
+      });
     }
     return json(500, { ok: false, error: 'server_error', message: String((err && err.message) || err), debug: blobsDebugInfo() });
   }

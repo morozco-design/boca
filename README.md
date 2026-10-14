@@ -252,7 +252,7 @@ entradas solo:
 
 - `/comprar.html` — página pública: el comprador elige entre los **eventos
   creados en el panel** (los agotados aparecen marcados), ingresa su mail y la
-  cantidad (máximo 5 por persona) y toca **Pagar con Mercado Pago**. El precio
+  cantidad y toca **Pagar con Mercado Pago**. El precio
   es fijo: **$450 por entrada**. Se puede linkear un evento puntual con
   `/comprar.html?evento=Nombre del evento`.
 - Mercado Pago cobra en su propia página (nunca pasan datos de tarjeta por
@@ -287,7 +287,7 @@ En Netlify → *Site configuration → Environment variables*:
 | `GMAIL_APP_PASSWORD` | Contraseña de aplicación de esa cuenta (ver abajo). |
 | `ADMIN_PASSCODE` | **Clave del panel.** Imprescindible antes de abrir la venta. |
 | `SALE_OPEN` | Opcional: `false` cierra la venta sin borrar nada. |
-| `MAX_PER_PERSON`, `RESERVE_MINUTES` | Opcionales (por defecto 5 y 15). |
+| `MAX_PER_ORDER`, `RESERVE_MINUTES` | Opcionales: máximo de entradas por compra (8) y minutos de reserva (15). No hay límite por persona. |
 | `MAIL_FROM_NAME` | Opcional: nombre del remitente en el mail. |
 
 El precio ($450) está fijo en `netlify/functions/_lib/config.js`
@@ -325,8 +325,6 @@ protege el sitio entero y los compradores tampoco podrían entrar.
 
 ## Límites conocidos
 
-- El tope de 5 entradas por persona se controla por mail: alguien con varios
-  mails distintos puede saltearlo.
 - Los pedidos y las reservas viven en Netlify Blobs; no hay un listado de
   ventas en el panel todavía (los pagos se ven en tu cuenta de Mercado Pago).
 - Pruebas automáticas de este flujo: `npm test` (corre las dos baterías, con

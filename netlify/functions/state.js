@@ -3,6 +3,7 @@
 const { json, noContent } = require('./_lib/http');
 const { isAdminAuthorized } = require('./_lib/auth');
 const { readState, initFromEvent, blobsDebugInfo, statsFor, eventSummaries, findEvent } = require('./_lib/store');
+const { releaseExpired } = require('./_lib/reservations');
 
 // GET /state              -> { ok, events: [summary...], updatedAt }
 // GET /state?eventId=xxx  -> { ok, events: [summary...], event: {id,name,tickets,stats,createdAt}, updatedAt }
@@ -20,6 +21,11 @@ exports.handler = async (event) => {
 
   try {
     const { state } = await readState();
+    // Las reservas vencidas (alguien empezó a pagar y no terminó) ya no
+    // cuentan: se muestran como disponibles. Es solo para la respuesta, no se
+    // guarda nada; el sistema las libera de verdad en la próxima compra.
+    const nowMs = Date.now();
+    (state.events || []).forEach((ev) => releaseExpired(ev, nowMs));
     const events = eventSummaries(state);
 
     const payload = { ok: true, events, updatedAt: state.updatedAt || null };

@@ -120,7 +120,7 @@ async function main() {
     const r = await call(saleInfo, 'GET');
     assert.strictEqual(r.data.open, true);
     assert.strictEqual(r.data.price, 450);
-    assert.strictEqual(r.data.max, 5);
+    assert.strictEqual(r.data.max, 8);
     assert.strictEqual(r.data.events.length, 1);
     assert.strictEqual(r.data.events[0].name, 'Fiesta BOCA');
     assert.strictEqual(r.data.events[0].available, 10);
@@ -225,25 +225,21 @@ async function main() {
     assert.strictEqual(t.filter((x) => x.orderId === r.data.orderId && x.status === 'emitido').length, 3);
   });
 
-  await test('tope por persona: con el mismo mail no se pasa de 5 (suma pedidos)', async () => {
-    // Ana ya compró 2 (pagadas).
+  await test('sin tope por persona: el mismo mail puede comprar más de 5 en total', async () => {
+    // Ana ya compró 2 (pagadas); ahora reserva 3 más (5 en total, y seguiría pudiendo).
     const ok = await call(createOrder, 'POST', { body: buyer({ quantity: 3 }) });
     assert.strictEqual(ok.status, 200, JSON.stringify(ok.data));
-    const no = await call(createOrder, 'POST', { body: buyer({ quantity: 1, email: 'ANA@example.com' }) });
-    assert.strictEqual(no.status, 409);
-    assert.strictEqual(no.data.error, 'quota_exceeded');
-    assert.strictEqual(no.data.remaining, 0);
   });
 
-  await test('cantidad inválida (0, 6, texto) se rechaza', async () => {
-    for (const q of [0, 6, 'x', 1.5]) {
+  await test('cantidad inválida (0, 9, texto, decimal) se rechaza', async () => {
+    for (const q of [0, 9, 'x', 1.5]) {
       const r = await call(createOrder, 'POST', { body: buyer({ email: 'otro@example.com', quantity: q }) });
       assert.strictEqual(r.status, 400, 'cantidad ' + q);
     }
     assert.strictEqual((await call(createOrder, 'POST', { body: buyer({ email: 'malmail' }) })).status, 400);
   });
 
-  await test('sin stock suficiente: 409 sold_out y no consume el cupo del comprador', async () => {
+  await test('sin stock suficiente: 409 sold_out y después se puede comprar lo que queda', async () => {
     // Quedan 10 - 5 emitidas - 3 reservadas por Ana = 2.
     const r = await call(createOrder, 'POST', { body: buyer({ name: 'Carla', email: 'carla@example.com', quantity: 4 }) });
     assert.strictEqual(r.status, 409);
@@ -338,7 +334,7 @@ async function main() {
     assert.strictEqual(count(await eventTickets(eid), 'emitido'), 2);
   });
 
-  await test('si Mercado Pago falla al crear el pago, se liberan las entradas y el cupo', async () => {
+  await test('si Mercado Pago falla al crear el pago, se liberan las entradas', async () => {
     const eid = await newEvent('Evento F', 3);
     setEvent(eid);
     mpState.failPreferences = true;
@@ -347,7 +343,7 @@ async function main() {
     assert.strictEqual(r.status, 502);
     assert.strictEqual(count(await eventTickets(eid), 'disponible'), 3);
     const again = await call(createOrder, 'POST', { body: buyer({ name: 'Lu', email: 'lu@example.com', quantity: 3 }) });
-    assert.strictEqual(again.status, 200, 'el cupo de Lu quedó libre');
+    assert.strictEqual(again.status, 200, 'las entradas de Lu quedaron libres');
   });
 
   await test('si falla el mail, el pago igual se registra y el reintento lo manda', async () => {
@@ -435,6 +431,60 @@ async function main() {
     const mail = sentMails[sentMails.length - 1];
     assert.ok(!mail.html.includes('undefined'));
     assert.ok(mail.html.includes('¡Gracias por tu compra!'));
+  });
+
+  await test('el panel (state) muestra como disponibles las reservas vencidas y como reservadas las vigentes', async () => {
+    const eid = await newEvent('Evento reservas', 3);
+    setEvent(eid);
+    const a = await call(createOrder, 'POST', { body: buyer({ email: 'res1@example.com', quantity: 2 }) });
+    assert.strictEqual(a.status, 200);
+    let t = await eventTickets(eid);
+    assert.strictEqual(count(t, 'reservado'), 2);
+    const { updateState } = require('../netlify/functions/_lib/store');
+    await updateState((s) => {
+      s.events.find((e) => e.id === eid).tickets.forEach((x) => { if (x.status === 'reservado') x.reservedUntil = new Date(Date.now() - 60000).toISOString(); });
+      return s;
+    });
+    t = await eventTickets(eid);
+    assert.strictEqual(count(t, 'reservado'), 0);
+    assert.strictEqual(count(t, 'disponible'), 3);
+    const r = await call(stateFn, 'GET', { query: { eventId: eid } });
+    assert.strictEqual(r.data.event.stats.disponible, 3);
+  });
+
+  await test('mail que falló: recargar la página de la entrada lo reintenta (y con debug=1 muestra el motivo)', async () => {
+    const eid = await newEvent('Evento mail', 2);
+    setEvent(eid);
+    const r = await call(createOrder, 'POST', { body: buyer({ email: 'mailfalla@example.com', quantity: 1 }) });
+    approvePayment('9101', r.data.orderId, 450);
+    const saved = process.env.GMAIL_APP_PASSWORD;
+    delete process.env.GMAIL_APP_PASSWORD;
+    const before = sentMails.length;
+    assert.strictEqual((await hook(9101)).status, 500);
+    const sinDebug = await call(orderStatus, 'GET', { query: { id: r.data.orderId } });
+    assert.strictEqual(sinDebug.data.emailSent, false);
+    assert.ok(!('emailError' in sinDebug.data), 'sin debug no se muestra el motivo');
+    const conDebug = await call(orderStatus, 'GET', { query: { id: r.data.orderId, debug: '1' } });
+    assert.ok(/GMAIL_APP_PASSWORD/.test(conDebug.data.emailError));
+    assert.strictEqual(sentMails.length, before);
+    // Se arregla la configuración y se recarga la página.
+    process.env.GMAIL_APP_PASSWORD = saved;
+    const ok = await call(orderStatus, 'GET', { query: { id: r.data.orderId } });
+    assert.strictEqual(ok.data.emailSent, true);
+    assert.strictEqual(sentMails.length, before + 1);
+    // Recargar de nuevo no manda otro.
+    await call(orderStatus, 'GET', { query: { id: r.data.orderId } });
+    assert.strictEqual(sentMails.length, before + 1);
+  });
+
+  await test('una sola compra de 8 entradas (más de 5) es válida si hay stock', async () => {
+    const eid = await newEvent('Evento grande', 12);
+    setEvent(eid);
+    const r = await call(createOrder, 'POST', { body: buyer({ name: 'Gran', email: 'gran@example.com', quantity: 8 }) });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.data));
+    approvePayment('9001', r.data.orderId, 450 * 8);
+    await hook(9001);
+    assert.strictEqual(count(await eventTickets(eid), 'emitido'), 8);
   });
 
   console.log('\n' + pass + ' pasaron, ' + fail + ' fallaron');

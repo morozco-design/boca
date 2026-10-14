@@ -15,7 +15,7 @@
 //   GMAIL_APP_PASSWORD  contraseña de aplicación de esa cuenta de Gmail
 //   ADMIN_PASSCODE      clave del panel (imprescindible antes de abrir la venta)
 //   SALE_OPEN           opcional: poné "false" para cerrar la venta sin borrar nada
-//   MAX_PER_PERSON      opcional: máximo de entradas por persona (por defecto 5)
+//   MAX_PER_ORDER       opcional: tope técnico de entradas por compra (por defecto 8). No hay límite por persona.
 //   RESERVE_MINUTES     opcional: minutos que se reservan las entradas mientras se paga (por defecto 15)
 //   MAIL_FROM_NAME      opcional: nombre que ve el comprador como remitente
 //   SITE_URL            opcional: URL pública del sitio (si no, se usa la que da Netlify)
@@ -31,7 +31,7 @@ function saleConfig() {
   return {
     price: PRICE_UYU,
     currency: 'UYU',
-    max: intEnv('MAX_PER_PERSON', 5),
+    max: intEnv('MAX_PER_ORDER', 8),
     reserveMinutes: intEnv('RESERVE_MINUTES', 15),
     open: String(process.env.SALE_OPEN || '').toLowerCase() !== 'false',
   };

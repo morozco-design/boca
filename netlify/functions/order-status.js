@@ -4,7 +4,7 @@ const { json, noContent } = require('./_lib/http');
 const { siteUrl } = require('./_lib/config');
 const { initFromEvent, readState, findEvent, blobsDebugInfo } = require('./_lib/store');
 const { getOrder, isValidOrderId } = require('./_lib/orders');
-const { processPayment } = require('./_lib/fulfill');
+const { processPayment, ensureEmail } = require('./_lib/fulfill');
 
 // PÚBLICO. GET ?id=<pedido>[&payment_id=<pago>]
 // El id del pedido es un código largo e imposible de adivinar: quien lo tiene
@@ -34,6 +34,14 @@ exports.handler = async (event) => {
       }
     }
 
+    // Si el pago ya se acreditó pero el mail no salió (por ejemplo por un
+    // problema de configuración que después se arregló), recargar esta
+    // página lo reintenta. Una vez enviado, no se vuelve a mandar.
+    if (order.status === 'pagado' && !order.emailSentAt) {
+      await ensureEmail(order.id, siteUrl(event));
+      order = (await getOrder(id)) || order;
+    }
+
     const payload = { ok: true, status: order.status, quantity: order.quantity, eventId: order.eventId };
     const { state } = await readState();
     const ev = findEvent(state, order.eventId);
@@ -43,6 +51,9 @@ exports.handler = async (event) => {
       payload.codes = order.codes;
       payload.name = order.name;
       payload.emailSent = !!order.emailSentAt;
+      // Solo con ?debug=1: el motivo por el que no salió el mail (nunca
+      // incluye claves; es el texto del error del servidor de correo).
+      if (q.debug === '1') payload.emailError = order.emailError || null;
     }
     if (order.status === 'pendiente') payload.reservedUntil = order.reservedUntil;
     return json(200, payload);

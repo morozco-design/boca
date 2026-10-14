@@ -2,7 +2,7 @@
 
 const mp = require('./mp');
 const { sendTicketsEmail } = require('./mailer');
-const { getOrder, updateOrder, markBuyerPaid } = require('./orders');
+const { getOrder, updateOrder } = require('./orders');
 const { updateState, readState, MutationRejected, findEvent } = require('./store');
 const { releaseExpired } = require('./reservations');
 
@@ -108,7 +108,6 @@ async function processPayment(paymentId, opts) {
       return o;
     });
     order = updated.value || order;
-    await markBuyerPaid(order.email, order.id);
   }
 
   const emailError = await ensureEmail(order.id, options.siteUrl);
