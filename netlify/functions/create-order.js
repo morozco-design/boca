@@ -16,7 +16,7 @@ const mp = require('./_lib/mp');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-// PÚBLICO. Body: { name, email, quantity }
+// PÚBLICO. Body: { eventId, email, quantity, name? }
 // 1) aparta las entradas (nadie más las puede comprar mientras se paga),
 // 2) crea el pedido, 3) crea el pago en Mercado Pago y devuelve el link.
 exports.handler = async (event) => {
@@ -29,11 +29,13 @@ exports.handler = async (event) => {
 
   const body = parseBody(event);
   if (!body) return json(400, { ok: false, error: 'invalid_json' });
+  const eventRef = typeof body.eventId === 'string' ? body.eventId.trim() : '';
   const name = typeof body.name === 'string' ? body.name.trim().replace(/\s+/g, ' ') : '';
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
   const quantity = Number(body.quantity);
 
-  if (name.length < 2 || name.length > 80) return json(400, { ok: false, error: 'invalid_name', message: 'Ingresá tu nombre.' });
+  if (!eventRef) return json(400, { ok: false, error: 'missing_event', message: 'Elegí un evento.' });
+  if (name.length > 80) return json(400, { ok: false, error: 'invalid_name', message: 'El nombre es demasiado largo.' });
   if (!EMAIL_RE.test(email) || email.length > 120) return json(400, { ok: false, error: 'invalid_email', message: 'Ingresá un mail válido.' });
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > cfg.max) {
     return json(400, { ok: false, error: 'invalid_quantity', message: 'Podés comprar entre 1 y ' + cfg.max + ' entradas.' });
@@ -59,11 +61,11 @@ exports.handler = async (event) => {
     let availableNow = 0;
     try {
       await updateState((state) => {
-        const ev = resolveSaleEvent(state, cfg.eventId);
+        const ev = resolveSaleEvent(state, eventRef);
         if (!ev) throw new MutationRejected('event_not_found', 'Evento no encontrado.');
         saleEventId = ev.id;
         eventName = ev.name;
-        codes = reserveTickets(ev, quantity, orderId, name, untilIso, nowMs);
+        codes = reserveTickets(ev, quantity, orderId, name || email, untilIso, nowMs);
         if (!codes) {
           availableNow = countAvailable(ev, nowMs);
           throw new MutationRejected('sold_out', 'No hay entradas suficientes.');
@@ -73,7 +75,7 @@ exports.handler = async (event) => {
     } catch (err) {
       if (err instanceof MutationRejected && err.code === 'event_not_found') {
         await releaseBuyerQuota(email, orderId);
-        return json(409, { ok: false, error: 'sale_closed', message: 'La venta no está abierta.' });
+        return json(409, { ok: false, error: 'event_not_found', message: 'Ese evento ya no está a la venta.' });
       }
       if (err instanceof MutationRejected && err.code === 'sold_out') {
         await releaseBuyerQuota(email, orderId);
@@ -113,7 +115,7 @@ exports.handler = async (event) => {
         unit_price: cfg.price,
         currency_id: cfg.currency,
       }],
-      payer: { name, email },
+      payer: name ? { name, email } : { email },
       external_reference: orderId,
       notification_url: site + '/.netlify/functions/mp-webhook',
       back_urls: {

@@ -76,7 +76,7 @@ async function processPayment(paymentId, opts) {
           if (t.status !== 'emitido') t.issuedAt = now;
           t.status = 'emitido';
           t.orderId = order.id;
-          t.recipient = order.name || null;
+          t.recipient = order.name || order.email || null;
           delete t.reservedUntil;
         }
         finalCodes = all.map((t) => t.code);

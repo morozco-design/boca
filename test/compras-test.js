@@ -46,7 +46,6 @@ process.env.MP_ACCESS_TOKEN = 'TEST-token';
 process.env.GMAIL_USER = 'vendedor@gmail.com';
 process.env.GMAIL_APP_PASSWORD = 'abcd efgh ijkl mnop';
 process.env.SITE_URL = 'https://mi-sitio.netlify.app';
-process.env.TICKET_PRICE = '600';
 delete process.env.MP_WEBHOOK_SECRET;
 delete process.env.ADMIN_PASSCODE;
 
@@ -104,44 +103,37 @@ function hook(paymentId, extraEvent) {
   }, extraEvent || {}));
 }
 
-const buyer = (over) => Object.assign({ name: 'Ana Pérez', email: 'ana@example.com', quantity: 2 }, over || {});
+let currentEvent = null;
+function setEvent(id) { currentEvent = id; }
+const buyer = (over) => Object.assign({ eventId: currentEvent, name: 'Ana Pérez', email: 'ana@example.com', quantity: 2 }, over || {});
 
 async function main() {
   console.log('Pase Único — pruebas de la venta online\n');
   mockBlobs.resetAll();
 
   const eventId = await newEvent('Fiesta BOCA', 10);
-  process.env.SALE_EVENT_ID = eventId;
+  setEvent(eventId);
 
   let order1 = null;
 
   await test('sale-info: venta abierta con precio, máximo y disponibles (sin códigos)', async () => {
     const r = await call(saleInfo, 'GET');
     assert.strictEqual(r.data.open, true);
-    assert.strictEqual(r.data.price, 600);
+    assert.strictEqual(r.data.price, 450);
     assert.strictEqual(r.data.max, 5);
-    assert.strictEqual(r.data.available, 10);
+    assert.strictEqual(r.data.events.length, 1);
+    assert.strictEqual(r.data.events[0].name, 'Fiesta BOCA');
+    assert.strictEqual(r.data.events[0].available, 10);
     assert.ok(!JSON.stringify(r.data).match(/[A-Z0-9]{4}-[A-Z0-9]{4}/), 'no debe filtrar códigos');
   });
 
-  await test('sale-info: sin SALE_EVENT_ID la venta está cerrada', async () => {
-    delete process.env.SALE_EVENT_ID;
+  await test('SALE_OPEN=false cierra la venta (sale-info y create-order)', async () => {
+    process.env.SALE_OPEN = 'false';
     const r = await call(saleInfo, 'GET');
     assert.strictEqual(r.data.open, false);
     const c = await call(createOrder, 'POST', { body: buyer() });
     assert.strictEqual(c.status, 409);
-    process.env.SALE_EVENT_ID = eventId;
-  });
-
-  await test('SALE_EVENT_ID también acepta el nombre exacto del evento', async () => {
-    process.env.SALE_EVENT_ID = 'fiesta boca';
-    const r = await call(saleInfo, 'GET');
-    assert.strictEqual(r.data.open, true);
-    assert.strictEqual(r.data.eventId, eventId);
-    process.env.SALE_EVENT_ID = 'No existe';
-    assert.strictEqual((await call(saleInfo, 'GET')).data.open, false);
-    assert.strictEqual((await call(createOrder, 'POST', { body: buyer({ email: 'x@example.com' }) })).status, 409);
-    process.env.SALE_EVENT_ID = eventId;
+    delete process.env.SALE_OPEN;
   });
 
   await test('create-order: reserva 2 entradas, crea el pago y devuelve el link', async () => {
@@ -152,14 +144,14 @@ async function main() {
     const pref = mpState.preferences[mpState.preferences.length - 1];
     assert.strictEqual(pref.external_reference, order1);
     assert.strictEqual(pref.items[0].quantity, 2);
-    assert.strictEqual(pref.items[0].unit_price, 600);
+    assert.strictEqual(pref.items[0].unit_price, 450);
     assert.strictEqual(pref.items[0].currency_id, 'UYU');
     assert.strictEqual(pref.notification_url, 'https://mi-sitio.netlify.app/.netlify/functions/mp-webhook');
     assert.ok(/-03:00$/.test(pref.expiration_date_to));
     const t = await eventTickets(eventId);
     assert.strictEqual(count(t, 'reservado'), 2);
     assert.strictEqual(count(t, 'disponible'), 8);
-    assert.strictEqual((await call(saleInfo, 'GET')).data.available, 8);
+    assert.strictEqual((await call(saleInfo, 'GET')).data.events.find((e) => e.id === eventId).available, 8);
   });
 
   await test('una entrada reservada (sin pagar) NO pasa en la puerta', async () => {
@@ -177,7 +169,7 @@ async function main() {
   });
 
   await test('webhook: pago aprobado entrega 2 entradas y manda UN mail con los QR', async () => {
-    approvePayment('1001', order1, 1200);
+    approvePayment('1001', order1, 900);
     const r = await hook(1001);
     assert.strictEqual(r.status, 200, JSON.stringify(r.data));
     assert.strictEqual(r.data.outcome, 'paid');
@@ -222,7 +214,7 @@ async function main() {
   await test('tres avisos simultáneos del mismo pago: 1 solo mail y entradas sin duplicar', async () => {
     const r = await call(createOrder, 'POST', { body: buyer({ name: 'Beto', email: 'beto@example.com', quantity: 3 }) });
     assert.strictEqual(r.status, 200);
-    approvePayment('1002', r.data.orderId, 1800);
+    approvePayment('1002', r.data.orderId, 1350);
     const before = sentMails.length;
     const results = await Promise.all([hook(1002), hook(1002), hook(1002)]);
     results.forEach((x) => assert.strictEqual(x.status, 200, JSON.stringify(x.data)));
@@ -249,7 +241,6 @@ async function main() {
       assert.strictEqual(r.status, 400, 'cantidad ' + q);
     }
     assert.strictEqual((await call(createOrder, 'POST', { body: buyer({ email: 'malmail' }) })).status, 400);
-    assert.strictEqual((await call(createOrder, 'POST', { body: buyer({ name: '' }) })).status, 400);
   });
 
   await test('sin stock suficiente: 409 sold_out y no consume el cupo del comprador', async () => {
@@ -264,7 +255,7 @@ async function main() {
 
   await test('pago con monto menor al del pedido: no se entregan entradas (queda para revisar)', async () => {
     const eid = await newEvent('Evento B', 4);
-    process.env.SALE_EVENT_ID = eid;
+    setEvent(eid);
     const r = await call(createOrder, 'POST', { body: buyer({ name: 'Dani', email: 'dani@example.com', quantity: 2 }) });
     approvePayment('2001', r.data.orderId, 100);
     const before = sentMails.length;
@@ -275,9 +266,9 @@ async function main() {
   });
 
   await test('pago no aprobado (pendiente/rechazado): no entrega nada', async () => {
-    process.env.SALE_EVENT_ID = (await call(stateFn, 'GET')).data.events.find((e) => e.name === 'Evento B').id;
+    setEvent((await call(stateFn, 'GET')).data.events.find((e) => e.name === 'Evento B').id);
     const r = await call(createOrder, 'POST', { body: buyer({ name: 'Eli', email: 'eli@example.com', quantity: 1 }) });
-    approvePayment('2002', r.data.orderId, 600, { status: 'rejected' });
+    approvePayment('2002', r.data.orderId, 450, { status: 'rejected' });
     const w = await hook(2002);
     assert.strictEqual(w.data.outcome, 'pending');
     const s = await call(orderStatus, 'GET', { query: { id: r.data.orderId } });
@@ -286,9 +277,9 @@ async function main() {
 
   await test('webhook perdido: order-status con payment_id confirma el pago igual', async () => {
     const eid = await newEvent('Evento C', 3);
-    process.env.SALE_EVENT_ID = eid;
+    setEvent(eid);
     const r = await call(createOrder, 'POST', { body: buyer({ name: 'Fede', email: 'fede@example.com', quantity: 1 }) });
-    approvePayment('3001', r.data.orderId, 600);
+    approvePayment('3001', r.data.orderId, 450);
     const before = sentMails.length;
     const s = await call(orderStatus, 'GET', { query: { id: r.data.orderId, payment_id: '3001' } });
     assert.strictEqual(s.data.status, 'pagado');
@@ -297,10 +288,10 @@ async function main() {
   });
 
   await test('payment_id de OTRO pedido no sirve para confirmar este', async () => {
-    const eid = process.env.SALE_EVENT_ID;
+    const eid = currentEvent;
     const a = await call(createOrder, 'POST', { body: buyer({ name: 'Gus', email: 'gus@example.com', quantity: 1 }) });
     const b = await call(createOrder, 'POST', { body: buyer({ name: 'Hugo', email: 'hugo@example.com', quantity: 1 }) });
-    approvePayment('3002', b.data.orderId, 600); // pago real, pero del pedido de Hugo
+    approvePayment('3002', b.data.orderId, 450); // pago real, pero del pedido de Hugo
     const s = await call(orderStatus, 'GET', { query: { id: a.data.orderId, payment_id: '3002' } });
     assert.strictEqual(s.data.status, 'pendiente');
     assert.strictEqual(count(await eventTickets(eid), 'emitido'), 1); // solo la de Fede
@@ -308,7 +299,7 @@ async function main() {
 
   await test('reserva vencida + pago tardío sin stock: se reembolsa y no se entrega', async () => {
     const eid = await newEvent('Evento D', 2);
-    process.env.SALE_EVENT_ID = eid;
+    setEvent(eid);
     const x = await call(createOrder, 'POST', { body: buyer({ name: 'Ian', email: 'ian@example.com', quantity: 2 }) });
     // Vence la reserva de Ian.
     const { updateState } = require('../netlify/functions/_lib/store');
@@ -316,11 +307,11 @@ async function main() {
       s.events.find((e) => e.id === eid).tickets.forEach((t) => { if (t.status === 'reservado') t.reservedUntil = new Date(Date.now() - 60000).toISOString(); });
       return s;
     });
-    assert.strictEqual((await call(saleInfo, 'GET')).data.available, 2, 'la reserva vencida cuenta como disponible');
+    assert.strictEqual((await call(saleInfo, 'GET')).data.events.find((e) => e.id === eid).available, 2, 'la reserva vencida cuenta como disponible');
     const y = await call(createOrder, 'POST', { body: buyer({ name: 'Jara', email: 'jara@example.com', quantity: 2 }) });
     assert.strictEqual(y.status, 200, JSON.stringify(y.data));
     // Ian paga tarde.
-    approvePayment('4001', x.data.orderId, 1200);
+    approvePayment('4001', x.data.orderId, 900);
     const before = sentMails.length;
     const w = await hook(4001);
     assert.strictEqual(w.data.outcome, 'reembolsado');
@@ -328,28 +319,28 @@ async function main() {
     assert.strictEqual(sentMails.length, before);
     assert.strictEqual(count(await eventTickets(eid), 'emitido'), 0);
     // Jara sí recibe las suyas.
-    approvePayment('4002', y.data.orderId, 1200);
+    approvePayment('4002', y.data.orderId, 900);
     assert.strictEqual((await hook(4002)).data.outcome, 'paid');
     assert.strictEqual(count(await eventTickets(eid), 'emitido'), 2);
   });
 
   await test('reserva vencida pero nadie tomó las entradas: un pago tardío igual las recibe', async () => {
     const eid = await newEvent('Evento E', 2);
-    process.env.SALE_EVENT_ID = eid;
+    setEvent(eid);
     const x = await call(createOrder, 'POST', { body: buyer({ name: 'Kai', email: 'kai@example.com', quantity: 2 }) });
     const { updateState } = require('../netlify/functions/_lib/store');
     await updateState((s) => {
       s.events.find((e) => e.id === eid).tickets.forEach((t) => { t.reservedUntil = new Date(Date.now() - 60000).toISOString(); });
       return s;
     });
-    approvePayment('5001', x.data.orderId, 1200);
+    approvePayment('5001', x.data.orderId, 900);
     assert.strictEqual((await hook(5001)).data.outcome, 'paid');
     assert.strictEqual(count(await eventTickets(eid), 'emitido'), 2);
   });
 
   await test('si Mercado Pago falla al crear el pago, se liberan las entradas y el cupo', async () => {
     const eid = await newEvent('Evento F', 3);
-    process.env.SALE_EVENT_ID = eid;
+    setEvent(eid);
     mpState.failPreferences = true;
     const r = await call(createOrder, 'POST', { body: buyer({ name: 'Lu', email: 'lu@example.com', quantity: 3 }) });
     mpState.failPreferences = false;
@@ -361,9 +352,9 @@ async function main() {
 
   await test('si falla el mail, el pago igual se registra y el reintento lo manda', async () => {
     const eid = await newEvent('Evento G', 2);
-    process.env.SALE_EVENT_ID = eid;
+    setEvent(eid);
     const r = await call(createOrder, 'POST', { body: buyer({ name: 'Mia', email: 'mia@example.com', quantity: 1 }) });
-    approvePayment('6001', r.data.orderId, 600);
+    approvePayment('6001', r.data.orderId, 450);
     const saved = process.env.GMAIL_APP_PASSWORD;
     delete process.env.GMAIL_APP_PASSWORD;
     const before = sentMails.length;
@@ -379,9 +370,9 @@ async function main() {
   await test('firma del webhook: con clave secreta, firma válida pasa e inválida se rechaza', async () => {
     process.env.MP_WEBHOOK_SECRET = 'secreto123';
     const eid = await newEvent('Evento H', 2);
-    process.env.SALE_EVENT_ID = eid;
+    setEvent(eid);
     const r = await call(createOrder, 'POST', { body: buyer({ name: 'Noa', email: 'noa@example.com', quantity: 1 }) });
-    approvePayment('7001', r.data.orderId, 600);
+    approvePayment('7001', r.data.orderId, 450);
     const ts = String(Date.now());
     const reqId = 'req-abc';
     const v1 = crypto.createHmac('sha256', 'secreto123').update('id:7001;request-id:' + reqId + ';ts:' + ts + ';').digest('hex');
@@ -412,6 +403,38 @@ async function main() {
     assert.strictEqual((await call(saleInfo, 'GET')).status, 200);
     assert.strictEqual((await call(validate, 'POST', { body: { code: 'ZZZZ-ZZZZ' } })).status, 404);
     delete process.env.ADMIN_PASSCODE;
+  });
+
+  await test('sale-info lista todos los eventos del panel; los agotados quedan marcados', async () => {
+    const e2 = await newEvent('Segunda fecha', 1);
+    await newEvent('Evento sin códigos todavía', 1); // se crea con 1 código
+    const r = await call(saleInfo, 'GET');
+    const names = r.data.events.map((e) => e.name);
+    assert.ok(names.includes('Fiesta BOCA') && names.includes('Segunda fecha'));
+    // Se compra la única entrada de "Segunda fecha": pasa a agotado.
+    const c = await call(createOrder, 'POST', { body: buyer({ eventId: e2, email: 'solo@example.com', quantity: 1 }) });
+    assert.strictEqual(c.status, 200, JSON.stringify(c.data));
+    const after = (await call(saleInfo, 'GET')).data.events.find((e) => e.id === e2);
+    assert.strictEqual(after.soldOut, true);
+    assert.strictEqual(after.available, 0);
+    // Sin eventId o con uno inexistente se rechaza.
+    assert.strictEqual((await call(createOrder, 'POST', { body: buyer({ eventId: '' }) })).status, 400);
+    const bad = await call(createOrder, 'POST', { body: buyer({ eventId: 'no-existe', email: 'zz@example.com' }) });
+    assert.strictEqual(bad.status, 409);
+    assert.strictEqual(bad.data.error, 'event_not_found');
+  });
+
+  await test('el nombre es opcional: sin nombre la entrada queda a nombre del mail', async () => {
+    const eid = await newEvent('Evento sin nombre', 2);
+    const r = await call(createOrder, 'POST', { body: { eventId: eid, email: 'sinnombre@example.com', quantity: 1 } });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.data));
+    approvePayment('9001', r.data.orderId, 450);
+    assert.strictEqual((await hook(9001)).data.outcome, 'paid');
+    const t = (await eventTickets(eid)).find((x) => x.status === 'emitido');
+    assert.strictEqual(t.recipient, 'sinnombre@example.com');
+    const mail = sentMails[sentMails.length - 1];
+    assert.ok(!mail.html.includes('undefined'));
+    assert.ok(mail.html.includes('¡Gracias por tu compra!'));
   });
 
   console.log('\n' + pass + ' pasaron, ' + fail + ' fallaron');

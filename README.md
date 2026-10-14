@@ -250,8 +250,11 @@ paralelo).
 Además de entregar códigos a mano desde el panel, el sitio puede vender
 entradas solo:
 
-- `/comprar.html` — página pública: nombre, mail, cantidad (máximo 5 por
-  persona) y botón **Pagar con Mercado Pago**.
+- `/comprar.html` — página pública: el comprador elige entre los **eventos
+  creados en el panel** (los agotados aparecen marcados), ingresa su mail y la
+  cantidad (máximo 5 por persona) y toca **Pagar con Mercado Pago**. El precio
+  es fijo: **$450 por entrada**. Se puede linkear un evento puntual con
+  `/comprar.html?evento=Nombre del evento`.
 - Mercado Pago cobra en su propia página (nunca pasan datos de tarjeta por
   este sitio) y vuelve a `/entrada.html`, donde el comprador ve sus entradas
   con el diseño del evento y las puede guardar como imagen.
@@ -278,8 +281,6 @@ En Netlify → *Site configuration → Environment variables*:
 
 | Variable | Qué es |
 |---|---|
-| `SALE_EVENT_ID` | Nombre exacto del evento a la venta (como aparece en el panel). También sirve su id. |
-| `TICKET_PRICE` | Precio de una entrada en pesos uruguayos, solo el número (ej: `600`). |
 | `MP_ACCESS_TOKEN` | Access Token de Mercado Pago (primero el de prueba, después el de producción). |
 | `MP_WEBHOOK_SECRET` | Clave secreta del webhook (ver abajo). Recomendada. |
 | `GMAIL_USER` | La casilla de Gmail desde la que salen las entradas. |
@@ -288,6 +289,12 @@ En Netlify → *Site configuration → Environment variables*:
 | `SALE_OPEN` | Opcional: `false` cierra la venta sin borrar nada. |
 | `MAX_PER_PERSON`, `RESERVE_MINUTES` | Opcionales (por defecto 5 y 15). |
 | `MAIL_FROM_NAME` | Opcional: nombre del remitente en el mail. |
+
+El precio ($450) está fijo en `netlify/functions/_lib/config.js`
+(`PRICE_UYU`); para cambiarlo se edita ese número y se vuelve a subir el
+archivo. Los eventos a la venta son todos los que tengan códigos generados en
+el panel. Las variables `SALE_EVENT_ID` y `TICKET_PRICE` de la versión
+anterior ya no se usan.
 
 Después de cargar o cambiar variables hay que **volver a desplegar** el sitio
 (*Deploys → Trigger deploy*), porque las funciones las leen al arrancar.

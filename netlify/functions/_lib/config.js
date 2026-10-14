@@ -1,19 +1,26 @@
 'use strict';
 
-// Configuración de la venta online, toda por variables de entorno de Netlify
-// (Site configuration → Environment variables). Nada de esto va en el código.
+// Configuración de la venta online.
 //
-//   SALE_EVENT_ID       nombre exacto del evento a la venta (como aparece en el panel) o su id
-//   TICKET_PRICE        precio de UNA entrada, en pesos uruguayos (ej: 600)
-//   SALE_OPEN           opcional: poné "false" para cerrar la venta sin borrar nada
-//   MAX_PER_PERSON      opcional: máximo de entradas por persona (por defecto 5)
-//   RESERVE_MINUTES     opcional: minutos que se reservan las entradas mientras se paga (por defecto 15)
+// El precio es FIJO y está acá (PRICE_UYU): $450 por entrada. Para cambiarlo
+// editá ese número y volvé a subir el archivo.
+//
+// Los eventos a la venta son todos los que existen en el panel (con códigos
+// generados); el comprador elige cuál.
+//
+// Variables de entorno de Netlify (Site configuration → Environment variables):
 //   MP_ACCESS_TOKEN     Access Token de Mercado Pago (de prueba o de producción)
 //   MP_WEBHOOK_SECRET   opcional pero recomendado: clave secreta del webhook de Mercado Pago
 //   GMAIL_USER          casilla de Gmail desde la que se mandan las entradas
 //   GMAIL_APP_PASSWORD  contraseña de aplicación de esa cuenta de Gmail
+//   ADMIN_PASSCODE      clave del panel (imprescindible antes de abrir la venta)
+//   SALE_OPEN           opcional: poné "false" para cerrar la venta sin borrar nada
+//   MAX_PER_PERSON      opcional: máximo de entradas por persona (por defecto 5)
+//   RESERVE_MINUTES     opcional: minutos que se reservan las entradas mientras se paga (por defecto 15)
 //   MAIL_FROM_NAME      opcional: nombre que ve el comprador como remitente
 //   SITE_URL            opcional: URL pública del sitio (si no, se usa la que da Netlify)
+
+const PRICE_UYU = 450;
 
 function intEnv(name, fallback) {
   const n = parseInt(process.env[name], 10);
@@ -21,16 +28,12 @@ function intEnv(name, fallback) {
 }
 
 function saleConfig() {
-  const eventId = (process.env.SALE_EVENT_ID || '').trim();
-  const price = Number(process.env.TICKET_PRICE);
-  const configured = Boolean(eventId) && Number.isFinite(price) && price > 0;
   return {
-    eventId,
-    price,
+    price: PRICE_UYU,
     currency: 'UYU',
     max: intEnv('MAX_PER_PERSON', 5),
     reserveMinutes: intEnv('RESERVE_MINUTES', 15),
-    open: configured && String(process.env.SALE_OPEN || '').toLowerCase() !== 'false',
+    open: String(process.env.SALE_OPEN || '').toLowerCase() !== 'false',
   };
 }
 
