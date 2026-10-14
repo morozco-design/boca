@@ -45,7 +45,7 @@ async function sendTicketsEmail({ to, name, eventName, codes, link }) {
     'Gracias por tu compra! ' + eventName + '\n\nTus códigos:\n' + codes.join('\n') + '\n\n' + (link ? 'Ver y guardar tus entradas: ' + link + '\n' : '');
 
   const transport = nodemailer.createTransport({ service: 'gmail', auth: { user, pass } });
-  const fromName = process.env.MAIL_FROM_NAME || eventName;
+  const fromName = process.env.MAIL_FROM_NAME || 'Coro Rodal';
   await transport.sendMail({
     from: '"' + String(fromName).replace(/"/g, '') + '" <' + user + '>',
     to,

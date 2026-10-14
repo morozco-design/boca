@@ -110,6 +110,8 @@ exports.handler = async (event) => {
       }],
       payer: name ? { name, email } : { email },
       external_reference: orderId,
+      // Cómo figura el cargo en el resumen de la tarjeta (máx. 16 caracteres).
+      statement_descriptor: String(process.env.MP_STATEMENT_DESCRIPTOR || 'CORO RODAL').slice(0, 16),
       notification_url: site + '/.netlify/functions/mp-webhook',
       back_urls: {
         success: site + '/entrada.html?o=' + orderId,
