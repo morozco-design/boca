@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Comprar entradas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Sora:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/styles.css">
+<style>
+  .buy-hero { width: 100%; aspect-ratio: 1 / 0.85; object-fit: cover; object-position: top; border-radius: 16px; display: block; margin: 0 auto 16px; box-shadow: var(--shadow); }
+  .buy-price { font-family: var(--font-display); font-size: 1.6rem; margin: 0 0 4px; }
+  .buy-sub { color: var(--ink-soft); font-size: 0.85rem; margin: 0 0 16px; }
+  .buy-field { margin-bottom: 14px; }
+  .buy-total { display: flex; justify-content: space-between; align-items: baseline; padding: 12px 0; border-top: 1px solid var(--line); margin-top: 6px; font-weight: 600; }
+  .buy-total strong { font-family: var(--font-display); font-size: 1.3rem; }
+  .buy-note { font-size: 0.78rem; color: var(--ink-soft); margin: 12px 0 0; text-align: center; line-height: 1.5; }
+  .btn-pay { width: 100%; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <h1 id="event-title">Entradas</h1>
+  </div>
+
+  <div id="banner" class="banner banner-warn" hidden></div>
+
+  <div class="card" id="loading-card"><p class="hint">Cargando…</p></div>
+
+  <div class="card" id="closed-card" hidden>
+    <h2>La venta no está abierta</h2>
+    <p class="hint hint-left">Por ahora no hay entradas a la venta. Volvé a intentar más tarde.</p>
+  </div>
+
+  <div class="card" id="soldout-card" hidden>
+    <h2>Entradas agotadas</h2>
+    <p class="hint hint-left">Ya no quedan entradas disponibles para este evento.</p>
+  </div>
+
+  <div class="card" id="buy-card" hidden>
+    <img id="hero" class="buy-hero" alt="" hidden>
+    <p class="buy-price" id="price-line"></p>
+    <p class="buy-sub" id="available-line"></p>
+
+    <form id="buy-form" novalidate>
+      <div class="buy-field">
+        <label for="buyer-name">Nombre y apellido</label>
+        <input type="text" id="buyer-name" autocomplete="name" maxlength="80" required>
+      </div>
+      <div class="buy-field">
+        <label for="buyer-email">Mail (acá te llegan las entradas)</label>
+        <input type="email" id="buyer-email" autocomplete="email" inputmode="email" maxlength="120" required>
+      </div>
+      <div class="buy-field">
+        <label for="buyer-qty">Cantidad de entradas</label>
+        <select id="buyer-qty"></select>
+      </div>
+      <div class="buy-total"><span>Total</span><strong id="total-line"></strong></div>
+      <button class="btn btn-pay" id="btn-pay" type="submit">Pagar con Mercado Pago</button>
+      <p class="buy-note" id="reserve-note"></p>
+    </form>
+  </div>
+</div>
+<script src="/assets/comprar.js"></script>
+</body>
+</html>

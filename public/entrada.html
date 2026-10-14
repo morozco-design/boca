@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mis entradas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Sora:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/styles.css">
+<style>
+  .pass { margin: 0 0 20px; text-align: center; }
+  .pass canvas { width: 100%; max-width: 320px; height: auto; border-radius: 16px; box-shadow: var(--shadow); display: block; margin: 0 auto 10px; background: #fff; }
+  .pass .btn { width: 100%; max-width: 320px; }
+  .status-title { font-family: var(--font-display); font-size: 1.15rem; margin: 0 0 8px; }
+  .status-text { color: var(--ink-soft); font-size: 0.9rem; line-height: 1.5; margin: 0; }
+  .spinner { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent); animation: spin 0.9s linear infinite; margin: 0 auto 14px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <h1 id="event-title">Mis entradas</h1>
+  </div>
+
+  <div class="card" id="status-card">
+    <div class="spinner" id="spinner"></div>
+    <p class="status-title" id="status-title">Confirmando tu pago…</p>
+    <p class="status-text" id="status-text">Esto tarda unos segundos. No cierres esta página.</p>
+  </div>
+
+  <div id="passes" hidden></div>
+</div>
+<script src="/vendor/qrcode.min.js"></script>
+<script src="/assets/ticket-card.js"></script>
+<script src="/assets/entrada.js"></script>
+</body>
+</html>

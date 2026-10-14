@@ -5,6 +5,7 @@ const { getStore, connectLambda } = require('@netlify/blobs');
 
 const STORE_NAME = 'pase-unico';
 const IMAGE_STORE_NAME = 'pase-unico-images';
+const ORDERS_STORE_NAME = 'pase-unico-orders';
 const STATE_KEY = 'state';
 const MAX_RETRIES = 8;
 
@@ -165,6 +166,13 @@ function getImageBlobStore() {
   return getStore({ name: IMAGE_STORE_NAME, ...manualBlobsOptions() });
 }
 
+// Pedidos de compra online (uno por compra) y el índice de compradores que
+// hace cumplir el máximo de entradas por persona. Van en su propio store
+// para no engordar el blob principal de tickets.
+function getOrdersStore() {
+  return getStore({ name: ORDERS_STORE_NAME, ...manualBlobsOptions() });
+}
+
 // Reads the current state plus its ETag (undefined if the key has never
 // been written yet). Always returns a usable state object.
 async function readState() {
@@ -234,6 +242,7 @@ module.exports = {
   eventSummaries,
   findEvent,
   getImageBlobStore,
+  getOrdersStore,
   STORE_NAME,
   STATE_KEY,
   IMAGE_STORE_NAME,

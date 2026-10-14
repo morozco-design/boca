@@ -117,7 +117,7 @@ label {
   color: var(--ink-soft);
   margin-bottom: 6px;
 }
-input[type="text"], input[type="number"], input[type="password"], select {
+input[type="text"], input[type="number"], input[type="password"], input[type="email"], select {
   width: 100%;
   font-family: var(--font-body);
   font-size: 1rem;
@@ -269,6 +269,7 @@ select { appearance: auto; }
 .pill-disponible { background: var(--unknown-bg); color: var(--unknown); }
 .pill-emitido { background: #fdf1d8; color: var(--gold); }
 .pill-usado { background: var(--good-bg); color: var(--good); }
+.pill-reservado { background: var(--unknown-bg); color: var(--unknown); }
 
 /* Scanner */
 .camera-card { text-align: center; }

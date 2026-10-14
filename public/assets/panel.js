@@ -85,7 +85,21 @@
     });
   }
 
-  function api(path, method, body, query) {
+  // Clave de administrador (opcional, ver ADMIN_PASSCODE en el README). Se
+  // pide una sola vez por sesión del navegador, cuando el servidor responde
+  // 401, y se manda en cada llamada.
+  var PASSCODE_KEY = 'pu_admin_passcode';
+  function readPasscode() {
+    try { return sessionStorage.getItem(PASSCODE_KEY) || ''; } catch (e) { return ''; }
+  }
+  function storePasscode(v) {
+    try {
+      if (v) sessionStorage.setItem(PASSCODE_KEY, v);
+      else sessionStorage.removeItem(PASSCODE_KEY);
+    } catch (e) { /* ignore */ }
+  }
+
+  function api(path, method, body, query, retried) {
     var url = '/.netlify/functions/' + path;
     if (query) {
       var qs = Object.keys(query)
@@ -95,12 +109,21 @@
       if (qs) url += '?' + qs;
     }
     var headers = { 'Content-Type': 'application/json' };
+    var passcode = readPasscode();
+    if (passcode) headers['x-admin-passcode'] = passcode;
     return fetch(url, {
       method: method || 'GET',
       headers: headers,
       body: body ? JSON.stringify(body) : undefined,
     }).then(function (res) {
       return res.json().then(function (data) {
+        if (res.status === 401 && !retried) {
+          var entered = window.prompt(passcode ? 'La clave no es correcta. Ingresala de nuevo:' : 'Ingresá la clave de administrador:');
+          if (entered) {
+            storePasscode(entered.trim());
+            return api(path, method, body, query, true);
+          }
+        }
         return { status: res.status, data: data };
       });
     });
@@ -721,7 +744,7 @@
     emptyPoolHint.hidden = true;
     var html = tickets.slice(0, 500).map(function (t) {
       var pillClass = 'pill-' + t.status;
-      var pillLabel = t.status === 'disponible' ? 'Disponible' : t.status === 'emitido' ? 'Entregado' : 'Usado';
+      var pillLabel = t.status === 'disponible' ? 'Disponible' : t.status === 'emitido' ? 'Entregado' : t.status === 'reservado' ? 'Reservado (pagando)' : 'Usado';
       var meta = t.recipient ? escapeHtml(t.recipient) : (t.status === 'disponible' ? 'En el pool' : '');
       var wasIssued = t.status === 'emitido' || t.status === 'usado';
       var viewBtn = wasIssued

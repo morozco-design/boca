@@ -4,9 +4,11 @@
   "private": true,
   "description": "Emisor y validador de códigos QR de entrada, con Netlify Functions + Netlify Blobs.",
   "scripts": {
-    "test": "node test/run-tests.js"
+    "test": "node test/run-tests.js && node test/compras-test.js"
   },
   "dependencies": {
-    "@netlify/blobs": "^11.0.1"
+    "@netlify/blobs": "^11.0.1",
+    "nodemailer": "^10.1.1",
+    "qrcode": "^1.5.4"
   }
 }

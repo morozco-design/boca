@@ -242,3 +242,85 @@ QR real via `canvas.captureStream()` — el ciclo completo de escaneo válido
 siguiente" (necesita un servidor estático local sirviendo `public/`, por
 ejemplo `python3 -m http.server 8765 --directory public`, corriendo en
 paralelo).
+
+---
+
+# Venta online con Mercado Pago
+
+Además de entregar códigos a mano desde el panel, el sitio puede vender
+entradas solo:
+
+- `/comprar.html` — página pública: nombre, mail, cantidad (máximo 5 por
+  persona) y botón **Pagar con Mercado Pago**.
+- Mercado Pago cobra en su propia página (nunca pasan datos de tarjeta por
+  este sitio) y vuelve a `/entrada.html`, donde el comprador ve sus entradas
+  con el diseño del evento y las puede guardar como imagen.
+- Cuando el pago se acredita, el sistema entrega las entradas y **manda un
+  mail** con cada QR (dentro del mensaje y adjunto) y un link a `/entrada.html`.
+
+## Cómo funciona por dentro
+
+1. `create-order` aparta las entradas (quedan **Reservadas**, nadie más las
+   puede comprar) por 15 minutos, crea el pedido y la preferencia de pago.
+2. Mercado Pago avisa a `mp-webhook` cuando hay un pago. El sistema **no se
+   fía del aviso**: consulta el pago a Mercado Pago con tu token y recién
+   entrega si está **aprobado**, es de ese pedido y cubre el monto.
+3. Es seguro que lleguen avisos repetidos o simultáneos: no se entregan
+   entradas ni se mandan mails de más. Si el aviso se demora, la página de
+   "gracias" confirma el pago por su cuenta.
+4. Si una reserva vence y alguien más tomó las entradas, y después llega el
+   pago, se **reembolsa automáticamente** el monto completo.
+5. Una entrada reservada que no se pagó **no pasa en la puerta**.
+
+## Configuración (una sola vez)
+
+En Netlify → *Site configuration → Environment variables*:
+
+| Variable | Qué es |
+|---|---|
+| `SALE_EVENT_ID` | Nombre exacto del evento a la venta (como aparece en el panel). También sirve su id. |
+| `TICKET_PRICE` | Precio de una entrada en pesos uruguayos, solo el número (ej: `600`). |
+| `MP_ACCESS_TOKEN` | Access Token de Mercado Pago (primero el de prueba, después el de producción). |
+| `MP_WEBHOOK_SECRET` | Clave secreta del webhook (ver abajo). Recomendada. |
+| `GMAIL_USER` | La casilla de Gmail desde la que salen las entradas. |
+| `GMAIL_APP_PASSWORD` | Contraseña de aplicación de esa cuenta (ver abajo). |
+| `ADMIN_PASSCODE` | **Clave del panel.** Imprescindible antes de abrir la venta. |
+| `SALE_OPEN` | Opcional: `false` cierra la venta sin borrar nada. |
+| `MAX_PER_PERSON`, `RESERVE_MINUTES` | Opcionales (por defecto 5 y 15). |
+| `MAIL_FROM_NAME` | Opcional: nombre del remitente en el mail. |
+
+Después de cargar o cambiar variables hay que **volver a desplegar** el sitio
+(*Deploys → Trigger deploy*), porque las funciones las leen al arrancar.
+
+**Mercado Pago** (mercadopago.com.uy/developers → *Tus integraciones*):
+creá una aplicación con *Checkout Pro* y copiá el Access Token de las
+credenciales de prueba. En *Webhooks* configurá la URL
+`https://TU-SITIO.netlify.app/.netlify/functions/mp-webhook`, el evento
+**Pagos**, y copiá la **clave secreta** que te muestra a `MP_WEBHOOK_SECRET`.
+Para probar, pagá con el usuario comprador de prueba y las tarjetas de prueba
+de Mercado Pago. Al pasar a producción, cambiá el Access Token por el de
+producción (y la clave del webhook si es otra).
+
+**Gmail**: la cuenta tiene que tener la verificación en dos pasos activada;
+después en *Cuenta de Google → Seguridad → Contraseñas de aplicaciones*
+creá una y pegala (los 16 caracteres, con o sin espacios) en
+`GMAIL_APP_PASSWORD`. Gmail permite unos 500 mails por día.
+
+## Seguridad: la clave del panel
+
+Con la venta pública, las funciones de administración (`state`, `generate`,
+`dispense`, `cancel`, `delete-event`, subir/quitar imagen) **no pueden quedar
+abiertas**: cualquiera que conozca su dirección podría ver los códigos o
+regalarse entradas. Definí `ADMIN_PASSCODE`: el panel la pide una vez por
+sesión del navegador. Las páginas públicas (`comprar`, `entrada`, escaneo)
+no la necesitan. No uses la *Password protection* de Netlify para esto:
+protege el sitio entero y los compradores tampoco podrían entrar.
+
+## Límites conocidos
+
+- El tope de 5 entradas por persona se controla por mail: alguien con varios
+  mails distintos puede saltearlo.
+- Los pedidos y las reservas viven en Netlify Blobs; no hay un listado de
+  ventas en el panel todavía (los pagos se ven en tu cuenta de Mercado Pago).
+- Pruebas automáticas de este flujo: `npm test` (corre las dos baterías, con
+  Mercado Pago y el mail simulados).

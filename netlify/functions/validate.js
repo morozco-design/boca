@@ -48,7 +48,7 @@ exports.handler = async (event) => {
         outcome = { ok: false, reason: 'already_used', usedAt: ticket.usedAt };
         throw new MutationRejected('already_used');
       }
-      if (ticket.status === 'disponible') {
+      if (ticket.status === 'disponible' || ticket.status === 'reservado') {
         outcome = { ok: false, reason: 'not_issued' };
         throw new MutationRejected('not_issued');
       }
