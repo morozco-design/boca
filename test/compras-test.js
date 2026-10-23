@@ -59,6 +59,7 @@ const orderStatus = fn('order-status');
 const validate = fn('validate');
 const editEvent = fn('edit-event');
 const adminAuth = fn('admin-auth');
+const eventImage = fn('event-image');
 
 let pass = 0;
 let fail = 0;
@@ -530,6 +531,32 @@ async function main() {
     assert.strictEqual((await call(saleInfo, 'GET')).status, 200);
     delete process.env.ADMIN_PASSCODE;
     assert.strictEqual((await call(stateFn, 'GET')).status, 200);
+  });
+
+  await test('imagen de la página de venta: se sube aparte del fondo de la entrada y el pago conserva su título', async () => {
+    const eid = await newEvent('Con imagen', 5);
+    const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    const up = await call(eventImage, 'POST', { body: { eventId: eid, imageDataUrl: png, kind: 'sale' } });
+    assert.strictEqual(up.status, 200, JSON.stringify(up.data));
+    let ev = (await call(saleInfo, 'GET')).data.events.find((e) => e.id === eid);
+    assert.strictEqual(ev.hasSaleImage, true);
+    assert.strictEqual(ev.hasImage, undefined);
+    const got = await eventImage({ httpMethod: 'GET', headers: {}, queryStringParameters: { eventId: eid, kind: 'sale' } });
+    assert.strictEqual(got.statusCode, 200);
+    assert.strictEqual(got.headers['Content-Type'], 'image/png');
+    // El fondo de la entrada sigue sin imagen.
+    assert.strictEqual((await call(eventImage, 'GET', { query: { eventId: eid } })).status, 404);
+    // Título del pago en Mercado Pago.
+    setEvent(eid);
+    const r = await call(createOrder, 'POST', { body: buyer({ email: 'img@example.com', quantity: 1 }) });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.data));
+    const pref = mpState.preferences[mpState.preferences.length - 1];
+    assert.strictEqual(pref.items[0].title, 'Entrada - Con imagen');
+    assert.strictEqual(pref.items[0].unit_price, 450);
+    // Quitarla.
+    assert.strictEqual((await call(eventImage, 'DELETE', { query: { eventId: eid, kind: 'sale' } })).status, 200);
+    ev = (await call(saleInfo, 'GET')).data.events.find((e) => e.id === eid);
+    assert.strictEqual(ev.hasSaleImage, false);
   });
 
   console.log('\n' + pass + ' pasaron, ' + fail + ' fallaron');

@@ -45,6 +45,7 @@ exports.handler = async (event) => {
     // is already gone by this point.
     try {
       await getImageBlobStore().delete(eventId);
+      await getImageBlobStore().delete('sale-' + eventId);
     } catch (imgErr) {
       console.error('[pase-unico] no se pudo borrar la imagen del evento eliminado:', {
         eventId,

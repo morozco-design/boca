@@ -28,6 +28,13 @@ const DATA_URL_RE = /^data:(image\/(?:png|jpeg|jpg|webp));base64,([A-Za-z0-9+/=]
 //        is what <img> tags and shared tickets load, same spirit as validate.js)
 // POST   { eventId, imageDataUrl }                     -> upload/replace
 // DELETE ?eventId=xxx                                  -> remove
+//
+// Con kind=sale (query en GET/DELETE, campo `kind` en POST) se trata la imagen
+// de la PÁGINA DE VENTA de ese evento (aparte del fondo de la entrada). Se
+// guarda con la clave "sale-<eventId>" y se marca con ev.hasSaleImage.
+function isSale(v) { return v === 'sale'; }
+function blobKey(eventId, sale) { return sale ? 'sale-' + eventId : eventId; }
+function flagName(sale) { return sale ? 'hasSaleImage' : 'hasImage'; }
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return noContent();
   initFromEvent(event);
@@ -35,9 +42,10 @@ exports.handler = async (event) => {
   if (event.httpMethod === 'GET') {
     const eventId = (event.queryStringParameters && event.queryStringParameters.eventId) || '';
     if (!eventId) return json(400, { ok: false, error: 'missing_event_id' });
+    const sale = isSale(event.queryStringParameters && event.queryStringParameters.kind);
     try {
       const store = getImageBlobStore();
-      const result = await store.getWithMetadata(eventId, { type: 'arrayBuffer' });
+      const result = await store.getWithMetadata(blobKey(eventId, sale), { type: 'arrayBuffer' });
       if (!result || result.data == null) return json(404, { ok: false, error: 'not_found' });
       const contentType = (result.metadata && result.metadata.contentType) || 'image/jpeg';
       return {
@@ -69,6 +77,7 @@ exports.handler = async (event) => {
     const eventId = typeof body.eventId === 'string' ? body.eventId.trim() : '';
     if (!eventId) return json(400, { ok: false, error: 'missing_event_id' });
 
+    const sale = isSale(body.kind);
     const dataUrl = typeof body.imageDataUrl === 'string' ? body.imageDataUrl : '';
     const match = dataUrl.match(DATA_URL_RE);
     if (!match) return json(400, { ok: false, error: 'invalid_image' });
@@ -83,14 +92,14 @@ exports.handler = async (event) => {
       await updateState((state) => {
         const ev = findEvent(state, eventId);
         if (!ev) throw new MutationRejected('event_not_found', 'Evento no encontrado.');
-        ev.hasImage = true;
+        ev[flagName(sale)] = true;
         return state;
       });
 
       const store = getImageBlobStore();
-      await store.set(eventId, buffer, { metadata: { contentType } });
+      await store.set(blobKey(eventId, sale), buffer, { metadata: { contentType } });
 
-      return json(200, { ok: true, eventId, hasImage: true });
+      return json(200, { ok: true, eventId, [flagName(sale)]: true });
     } catch (err) {
       if (err instanceof MutationRejected) {
         return json(err.code === 'event_not_found' ? 404 : 400, { ok: false, error: err.code, message: err.message });
@@ -102,18 +111,19 @@ exports.handler = async (event) => {
   if (event.httpMethod === 'DELETE') {
     const eventId = (event.queryStringParameters && event.queryStringParameters.eventId) || '';
     if (!eventId) return json(400, { ok: false, error: 'missing_event_id' });
+    const sale = isSale(event.queryStringParameters && event.queryStringParameters.kind);
     try {
       await updateState((state) => {
         const ev = findEvent(state, eventId);
         if (!ev) throw new MutationRejected('event_not_found', 'Evento no encontrado.');
-        ev.hasImage = false;
+        ev[flagName(sale)] = false;
         return state;
       });
 
       const store = getImageBlobStore();
-      await store.delete(eventId);
+      await store.delete(blobKey(eventId, sale));
 
-      return json(200, { ok: true, eventId, hasImage: false });
+      return json(200, { ok: true, eventId, [flagName(sale)]: false });
     } catch (err) {
       if (err instanceof MutationRejected) {
         return json(err.code === 'event_not_found' ? 404 : 400, { ok: false, error: err.code, message: err.message });

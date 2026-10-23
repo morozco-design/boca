@@ -41,6 +41,7 @@ exports.handler = async (event) => {
         tickets: ev.tickets || [],
         stats: statsFor(ev.tickets),
         hasImage: !!ev.hasImage,
+        hasSaleImage: !!ev.hasSaleImage,
       };
     }
 

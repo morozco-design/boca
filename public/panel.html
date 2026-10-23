@@ -44,6 +44,22 @@
     </div>
   </div>
 
+  <div class="card" id="sale-image-card" hidden>
+    <h2>Imagen de la página de venta</h2>
+    <p class="hint hint-left">Es la imagen grande que se ve arriba en la página donde el público compra. Tamaño ideal: <strong>1200 × 800 px</strong> (horizontal, proporción 3:2), en JPG o PNG. Si subís otra medida, se recorta al centro automáticamente, así que dejá lo importante (texto, caras) lejos de los bordes.</p>
+    <div class="image-upload-row">
+      <div class="image-preview-holder" id="sale-preview-holder" style="aspect-ratio:3/2;width:150px;height:auto;">
+        <img id="sale-preview" alt="Vista previa de la imagen de la página de venta" hidden style="width:100%;height:100%;object-fit:cover;">
+        <span class="image-preview-empty" id="sale-preview-empty">Sin imagen</span>
+      </div>
+      <div class="image-upload-actions">
+        <input type="file" id="input-sale-image" accept="image/png,image/jpeg,image/webp" hidden>
+        <button class="btn btn-secondary btn-small" id="btn-choose-sale-image" type="button">Subir imagen</button>
+        <button class="btn btn-danger btn-small" id="btn-remove-sale-image" type="button" hidden>Quitar imagen</button>
+      </div>
+    </div>
+  </div>
+
   <div class="stats-row" id="stats-row">
     <div class="stat"><span class="n" id="stat-total">0</span><span class="l">Totales</span></div>
     <div class="stat"><span class="n" id="stat-disponible">0</span><span class="l">Disponibles</span></div>

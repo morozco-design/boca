@@ -50,6 +50,15 @@
   var btnChooseImage = document.getElementById('btn-choose-image');
   var btnRemoveImage = document.getElementById('btn-remove-image');
 
+  var saleImageCard = document.getElementById('sale-image-card');
+  var salePreview = document.getElementById('sale-preview');
+  var salePreviewEmpty = document.getElementById('sale-preview-empty');
+  var inputSaleImage = document.getElementById('input-sale-image');
+  var btnChooseSaleImage = document.getElementById('btn-choose-sale-image');
+  var btnRemoveSaleImage = document.getElementById('btn-remove-sale-image');
+  var SALE_W = 1200;
+  var SALE_H = 800;
+
   var poolCard = document.getElementById('pool-card');
   var searchInput = document.getElementById('search-code');
   var btnRefresh = document.getElementById('btn-refresh');
@@ -426,7 +435,9 @@
   // canonical portrait canvas so every uploaded image ends up with the same
   // proportions server-side regardless of what the admin picked — the
   // person uploading never has to pre-crop anything themselves.
-  function normalizeImageFileToDataUrl(file) {
+  function normalizeImageFileToDataUrl(file, outW, outH) {
+    var W = outW || CARD_W;
+    var H = outH || CARD_H;
     return new Promise(function (resolve, reject) {
       var reader = new FileReader();
       reader.onerror = function () { reject(new Error('read_failed')); };
@@ -436,16 +447,16 @@
         img.onload = function () {
           try {
             var canvas = document.createElement('canvas');
-            canvas.width = CARD_W;
-            canvas.height = CARD_H;
+            canvas.width = W;
+            canvas.height = H;
             var ctx = canvas.getContext('2d');
-            var scale = Math.max(CARD_W / img.naturalWidth, CARD_H / img.naturalHeight);
+            var scale = Math.max(W / img.naturalWidth, H / img.naturalHeight);
             var dw = img.naturalWidth * scale;
             var dh = img.naturalHeight * scale;
-            var dx = (CARD_W - dw) / 2;
-            var dy = (CARD_H - dh) / 2;
+            var dx = (W - dw) / 2;
+            var dy = (H - dh) / 2;
             ctx.fillStyle = '#111111';
-            ctx.fillRect(0, 0, CARD_W, CARD_H);
+            ctx.fillRect(0, 0, W, H);
             ctx.drawImage(img, dx, dy, dw, dh);
             resolve(canvas.toDataURL('image/jpeg', 0.85));
           } catch (e) {
@@ -604,6 +615,7 @@
     dispenseCard.hidden = isNew;
     poolCard.hidden = isNew;
     imageCard.hidden = isNew;
+    saleImageCard.hidden = isNew;
     // Agregar códigos a un evento existente se hace desde "Editar" (aforo).
     generateCard.hidden = !isNew;
     noEventsHint.hidden = !(isNew && events.length === 0);
@@ -635,7 +647,25 @@
     }
   }
 
+  function syncSalePreview() {
+    var has = !isNewMode() && !!currentEvent.hasSaleImage;
+    btnRemoveSaleImage.hidden = !has;
+    if (has) {
+      salePreview.hidden = false;
+      salePreviewEmpty.hidden = true;
+      salePreview.src = '/.netlify/functions/event-image?kind=sale&eventId=' + encodeURIComponent(currentEventId) + '&v=' + Date.now();
+    } else {
+      salePreview.hidden = true;
+      salePreview.removeAttribute('src');
+      salePreviewEmpty.hidden = false;
+    }
+  }
+
   function resetImagePreview(loading) {
+    btnRemoveSaleImage.hidden = true;
+    salePreview.hidden = true;
+    salePreview.removeAttribute('src');
+    salePreviewEmpty.hidden = false;
     btnRemoveImage.hidden = true;
     imagePreview.hidden = true;
     imagePreview.removeAttribute('src');
@@ -676,6 +706,7 @@
         refreshDerivedUI();
         renderPoolView();
         syncImagePreview();
+        syncSalePreview();
       } else if (result.status === 404) {
         // The event was deleted from elsewhere; fall back gracefully.
         loadEvents();
@@ -888,6 +919,67 @@
         });
       }
     );
+  });
+
+  // ---- Imagen de la página de venta ----
+  btnChooseSaleImage.addEventListener('click', function () {
+    if (isNewMode()) return;
+    inputSaleImage.click();
+  });
+
+  inputSaleImage.addEventListener('change', function () {
+    var file = inputSaleImage.files && inputSaleImage.files[0];
+    inputSaleImage.value = '';
+    if (!file || isNewMode()) return;
+    if (!/^image\//.test(file.type)) {
+      toast('Elegí un archivo de imagen (PNG, JPG o WEBP).');
+      return;
+    }
+    var targetEventId = currentEventId;
+    btnChooseSaleImage.disabled = true;
+    btnChooseSaleImage.textContent = 'Procesando…';
+    normalizeImageFileToDataUrl(file, SALE_W, SALE_H)
+      .then(function (dataUrl) {
+        return api('event-image', 'POST', { eventId: targetEventId, imageDataUrl: dataUrl, kind: 'sale' });
+      })
+      .then(function (result) {
+        if (result.data && result.data.ok) {
+          if (targetEventId === currentEventId) {
+            currentEvent.hasSaleImage = true;
+            syncSalePreview();
+          }
+          var ev = events.find(function (e) { return e.id === targetEventId; });
+          if (ev) ev.hasSaleImage = true;
+          toast('Imagen de la página de venta actualizada.');
+        } else if (!resyncIfEventMissing(result)) {
+          toast((result.data && result.data.message) || 'No se pudo subir la imagen.');
+        }
+      })
+      .catch(function () { toast('No se pudo procesar la imagen.'); })
+      .finally(function () {
+        btnChooseSaleImage.disabled = false;
+        btnChooseSaleImage.textContent = 'Subir imagen';
+      });
+  });
+
+  btnRemoveSaleImage.addEventListener('click', function () {
+    if (isNewMode()) return;
+    var targetEventId = currentEventId;
+    showConfirm('Quitar imagen', 'Se quitará la imagen de la página de venta de este evento. ¿Confirmás?', function () {
+      api('event-image', 'DELETE', null, { eventId: targetEventId, kind: 'sale' }).then(function (result) {
+        if (result.data && result.data.ok) {
+          if (targetEventId === currentEventId) {
+            currentEvent.hasSaleImage = false;
+            syncSalePreview();
+          }
+          var ev = events.find(function (e) { return e.id === targetEventId; });
+          if (ev) ev.hasSaleImage = false;
+          toast('Imagen eliminada.');
+        } else if (!resyncIfEventMissing(result)) {
+          toast((result.data && result.data.message) || 'No se pudo quitar la imagen.');
+        }
+      }).catch(function () { toast('Sin conexión con el servidor.'); });
+    });
   });
 
   poolView.addEventListener('click', function (e) {
@@ -1160,6 +1252,7 @@
         renderEventOptions();
         refreshDerivedUI();
         renderPoolView();
+        syncSalePreview();
         toast('Evento actualizado.');
       } else if (!resyncIfEventMissing(result) && result.status !== 401) {
         toast((result.data && result.data.message) || 'No se pudo guardar los cambios.');

@@ -44,8 +44,8 @@
     document.title = 'Entradas — ' + ev.name;
 
     var hero = $('hero');
-    if (ev.hasImage) {
-      hero.src = '/.netlify/functions/event-image?eventId=' + encodeURIComponent(ev.id);
+    if (ev.hasSaleImage) {
+      hero.src = '/.netlify/functions/event-image?kind=sale&eventId=' + encodeURIComponent(ev.id);
       hero.alt = ev.name;
       hero.hidden = false;
     } else {
@@ -75,7 +75,7 @@
     if (!info || !info.open) { show('closed-card', true); return; }
     if (info.events.every(function (e) { return e.soldOut; })) { show('soldout-card', true); return; }
 
-    $('price-line').textContent = money(info.price) + ' por entrada';
+    $('price-line').textContent = 'Acceso General · ' + money(info.price);
     $('reserve-note').textContent = 'Se reservan unos minutos mientras pagás. Al terminar te mandamos las entradas por mail.';
 
     var sel = $('event-select');

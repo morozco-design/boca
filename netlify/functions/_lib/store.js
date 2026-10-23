@@ -105,6 +105,7 @@ function eventSummaries(state) {
     createdAt: ev.createdAt || null,
     stats: statsFor(ev.tickets),
     hasImage: !!ev.hasImage,
+    hasSaleImage: !!ev.hasSaleImage,
   }));
 }
 

@@ -23,7 +23,7 @@ exports.handler = async (event) => {
       .filter((ev) => (ev.tickets || []).length > 0)
       .map((ev) => {
         const available = countAvailable(ev, nowMs);
-        return { id: ev.id, name: ev.name, hasImage: !!ev.hasImage, available, soldOut: available === 0 };
+        return { id: ev.id, name: ev.name, hasSaleImage: !!ev.hasSaleImage, available, soldOut: available === 0 };
       });
     return json(200, {
       ok: true,
