@@ -559,6 +559,22 @@ async function main() {
     assert.strictEqual(ev.hasSaleImage, false);
   });
 
+  await test('orden de los eventos en la venta: la posición del panel manda', async () => {
+    const a = await newEvent('Orden A', 2);
+    const b = await newEvent('Orden B', 2);
+    const names = () => call(saleInfo, 'GET').then((r) => r.data.events.map((e) => e.name));
+    const base = await names();
+    assert.ok(base.indexOf('Orden A') < base.indexOf('Orden B'));
+    assert.strictEqual((await call(editEvent, 'POST', { body: { eventId: b, saleOrder: 1 } })).status, 200);
+    const after = await names();
+    assert.strictEqual(after[0], 'Orden B');
+    assert.strictEqual((await call(editEvent, 'POST', { body: { eventId: b, saleOrder: 0 } })).status, 400);
+    // Sin posición vuelve al orden de creación.
+    await call(editEvent, 'POST', { body: { eventId: b, saleOrder: null } });
+    const back = await names();
+    assert.ok(back.indexOf('Orden A') < back.indexOf('Orden B'));
+  });
+
   console.log('\n' + pass + ' pasaron, ' + fail + ' fallaron');
   process.exit(fail ? 1 : 0);
 }

@@ -26,6 +26,7 @@
   var editName = document.getElementById('edit-name');
   var editCapacity = document.getElementById('edit-capacity');
   var editHint = document.getElementById('edit-hint');
+  var editOrder = document.getElementById('edit-order');
   var securityCard = document.getElementById('security-card');
   var btnLogout = document.getElementById('btn-logout');
 
@@ -1228,6 +1229,7 @@
     var tickets = currentEvent.tickets || [];
     var locked = tickets.filter(function (t) { return t.status !== 'disponible'; }).length;
     editName.value = ev.name;
+    editOrder.value = ev.saleOrder ? String(ev.saleOrder) : '';
     editCapacity.value = String(tickets.length || (ev.stats && ev.stats.total) || 1);
     editCapacity.min = String(Math.max(1, locked));
     editHint.textContent = locked > 0
@@ -1244,7 +1246,7 @@
     var cap = parseInt(editCapacity.value, 10);
     if (!name) { toast('Poné un nombre para el evento.'); return; }
     if (!(cap >= 1)) { toast('Ingresá un aforo válido.'); return; }
-    api('edit-event', 'POST', { eventId: currentEventId, name: name, capacity: cap }).then(function (result) {
+    api('edit-event', 'POST', { eventId: currentEventId, name: name, capacity: cap, saleOrder: editOrder.value.trim() === '' ? null : parseInt(editOrder.value, 10) }).then(function (result) {
       if (result.data && result.data.ok) {
         editModal.hidden = true;
         currentEvent = result.data.event;

@@ -43,13 +43,22 @@ exports.handler = async (event) => {
   if (hasCap && (!Number.isInteger(capacity) || capacity < 1 || capacity > MAX_CAPACITY)) {
     return json(400, { ok: false, error: 'invalid_capacity', message: 'El aforo tiene que ser un número entre 1 y ' + MAX_CAPACITY + '.' });
   }
-  if (!hasName && !hasCap) return json(400, { ok: false, error: 'nothing_to_change' });
+  const hasOrder = body.saleOrder !== undefined;
+  let saleOrder = null;
+  if (hasOrder && body.saleOrder !== null && body.saleOrder !== '') {
+    saleOrder = Number(body.saleOrder);
+    if (!Number.isInteger(saleOrder) || saleOrder < 1 || saleOrder > 999) {
+      return json(400, { ok: false, error: 'invalid_order', message: 'La posición tiene que ser un número entre 1 y 999.' });
+    }
+  }
+  if (!hasName && !hasCap && !hasOrder) return json(400, { ok: false, error: 'nothing_to_change' });
 
   try {
     const nextState = await updateState((state) => {
       const ev = findEvent(state, eventId);
       if (!ev) throw new MutationRejected('event_not_found', 'Evento no encontrado.');
       if (hasName) ev.name = name;
+      if (hasOrder) ev.saleOrder = saleOrder;
 
       if (hasCap) {
         const tickets = ev.tickets || [];
@@ -85,7 +94,7 @@ exports.handler = async (event) => {
     const ev = findEvent(nextState, eventId);
     return json(200, {
       ok: true,
-      event: { id: ev.id, name: ev.name, createdAt: ev.createdAt, tickets: ev.tickets, stats: statsFor(ev.tickets), hasImage: !!ev.hasImage, hasSaleImage: !!ev.hasSaleImage },
+      event: { id: ev.id, name: ev.name, createdAt: ev.createdAt, tickets: ev.tickets, stats: statsFor(ev.tickets), hasImage: !!ev.hasImage, hasSaleImage: !!ev.hasSaleImage, saleOrder: ev.saleOrder || null },
       events: eventSummaries(nextState),
     });
   } catch (err) {

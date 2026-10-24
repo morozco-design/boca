@@ -19,8 +19,13 @@ exports.handler = async (event) => {
   try {
     const { state } = await readState();
     const nowMs = Date.now();
+    // Orden en la venta: primero los que tienen posición (de menor a mayor);
+    // el resto, en el orden en que se crearon.
     const events = (state.events || [])
       .filter((ev) => (ev.tickets || []).length > 0)
+      .map((ev, i) => ({ ev, i }))
+      .sort((a, b) => (a.ev.saleOrder || 1e9) - (b.ev.saleOrder || 1e9) || a.i - b.i)
+      .map(({ ev }) => ev)
       .map((ev) => {
         const available = countAvailable(ev, nowMs);
         return { id: ev.id, name: ev.name, hasSaleImage: !!ev.hasSaleImage, available, soldOut: available === 0 };

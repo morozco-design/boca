@@ -89,7 +89,7 @@ exports.handler = async (event) => {
     const ev = findEvent(nextState, targetId);
     return json(200, {
       ok: true,
-      event: { id: ev.id, name: ev.name, createdAt: ev.createdAt, tickets: ev.tickets, stats: statsFor(ev.tickets), hasImage: !!ev.hasImage, hasSaleImage: !!ev.hasSaleImage },
+      event: { id: ev.id, name: ev.name, createdAt: ev.createdAt, tickets: ev.tickets, stats: statsFor(ev.tickets), hasImage: !!ev.hasImage, hasSaleImage: !!ev.hasSaleImage, saleOrder: ev.saleOrder || null },
       events: eventSummaries(nextState),
     });
   } catch (err) {
