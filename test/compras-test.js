@@ -575,6 +575,37 @@ async function main() {
     assert.ok(back.indexOf('Orden A') < back.indexOf('Orden B'));
   });
 
+  await test('mail con imagen del evento: llega la entrada completa (fondo + QR) además del QR', async () => {
+    const fs = require('fs');
+    const eid = await newEvent('Con poster', 4);
+    const poster = fs.readFileSync(require('path').join(__dirname, 'fixtures', 'poster-con-recuadro.jpg'));
+    const up = await call(eventImage, 'POST', { body: { eventId: eid, imageDataUrl: 'data:image/jpeg;base64,' + poster.toString('base64') } });
+    assert.strictEqual(up.status, 200, JSON.stringify(up.data));
+    setEvent(eid);
+    const r = await call(createOrder, 'POST', { body: buyer({ name: 'Pia', email: 'pia@example.com', quantity: 2 }) });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.data));
+    approvePayment('9301', r.data.orderId, 900);
+    const before = sentMails.length;
+    await hook(9301);
+    assert.strictEqual(sentMails.length, before + 1);
+    const mail = sentMails[sentMails.length - 1];
+    const jpgs = mail.attachments.filter((a) => /^entrada-.*\.jpg$/.test(a.filename));
+    const pngs = mail.attachments.filter((a) => /^qr-.*\.png$/.test(a.filename));
+    assert.strictEqual(jpgs.length, 2);
+    assert.strictEqual(pngs.length, 2);
+    assert.ok(jpgs[0].content[0] === 0xff && jpgs[0].content[1] === 0xd8, 'es un JPEG');
+    // El QR dentro de la imagen se lee y es el de esa entrada.
+    const jpeg = require('jpeg-js');
+    const jsQR = require('../public/vendor/jsQR.min.js');
+    const d = jpeg.decode(jpgs[0].content, { useTArray: true });
+    const qr = (jsQR.default || jsQR)(new Uint8ClampedArray(d.data), d.width, d.height);
+    assert.ok(qr && qr.data.startsWith('PU:'), 'QR legible');
+    assert.ok(mail.html.includes('cid:ticket0@entradas'));
+    assert.ok(mail.codes === undefined);
+    const code = qr.data.slice(3);
+    assert.ok(jpgs[0].filename.includes(code));
+  });
+
   console.log('\n' + pass + ' pasaron, ' + fail + ' fallaron');
   process.exit(fail ? 1 : 0);
 }

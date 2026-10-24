@@ -3,7 +3,7 @@
 const mp = require('./mp');
 const { sendTicketsEmail } = require('./mailer');
 const { getOrder, updateOrder } = require('./orders');
-const { updateState, readState, MutationRejected, findEvent } = require('./store');
+const { updateState, readState, MutationRejected, findEvent, getImageBlobStore } = require('./store');
 const { releaseExpired } = require('./reservations');
 
 // Confirma un pago de Mercado Pago y entrega las entradas. Lo llaman tanto el
@@ -129,7 +129,16 @@ async function ensureEmail(orderId, siteUrl) {
   try {
     const { state } = await readState();
     const ev = findEvent(state, order.eventId);
+    // Imagen de fondo del evento (si tiene), para armar la entrada completa.
+    let background = null;
+    if (ev && ev.hasImage) {
+      try {
+        const img = await getImageBlobStore().getWithMetadata(order.eventId, { type: 'arrayBuffer' });
+        if (img && img.data != null) background = Buffer.from(img.data);
+      } catch (e) { background = null; }
+    }
     await sendTicketsEmail({
+      background,
       to: order.email,
       name: order.name,
       eventName: ev ? ev.name : order.eventName,

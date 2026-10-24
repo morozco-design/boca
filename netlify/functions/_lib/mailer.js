@@ -8,7 +8,7 @@ function escapeHtml(s) {
 // (y adjunto, para guardarlo) y un link a la página con el diseño completo.
 // Gmail: necesita GMAIL_USER y GMAIL_APP_PASSWORD (contraseña de aplicación,
 // que se crea en la cuenta de Google con verificación en dos pasos activa).
-async function sendTicketsEmail({ to, name, eventName, codes, link }) {
+async function sendTicketsEmail({ to, name, eventName, codes, link, background }) {
   const user = process.env.GMAIL_USER;
   const pass = process.env.GMAIL_APP_PASSWORD;
   if (!user || !pass) throw new Error('GMAIL_USER / GMAIL_APP_PASSWORD no están configurados en Netlify.');
@@ -16,11 +16,34 @@ async function sendTicketsEmail({ to, name, eventName, codes, link }) {
   const nodemailer = require('nodemailer');
   const QRCode = require('qrcode');
 
+  // Si el evento tiene imagen de fondo con recuadro para el QR, cada entrada
+  // llega también como imagen completa (diseño + QR insertado).
+  let prepared = null;
+  if (background && background.length) {
+    try { prepared = require('./ticket-image').prepareBackground(background); } catch (e) { prepared = null; }
+  }
+
   const attachments = [];
   const blocks = [];
   for (let i = 0; i < codes.length; i++) {
     const cid = 'qr' + i + '@entradas';
     const png = await QRCode.toBuffer('PU:' + codes[i], { type: 'png', width: 360, margin: 2, errorCorrectionLevel: 'M' });
+    let ticketJpg = null;
+    if (prepared) {
+      try { ticketJpg = require('./ticket-image').renderTicketJpeg(prepared, codes[i]); } catch (e) { ticketJpg = null; }
+    }
+    if (ticketJpg) {
+      const tcid = 'ticket' + i + '@entradas';
+      attachments.push({ filename: 'entrada-' + codes[i] + '.jpg', content: ticketJpg, cid: tcid, contentType: 'image/jpeg' });
+      attachments.push({ filename: 'qr-' + codes[i] + '.png', content: png, contentType: 'image/png' });
+      blocks.push(
+        '<div style="display:inline-block;margin:8px;padding:10px;border:1px solid #ddd6ee;border-radius:14px;text-align:center;background:#fff">' +
+          '<img src="cid:' + tcid + '" width="270" alt="Entrada ' + escapeHtml(codes[i]) + '" style="display:block;margin:0 auto 8px;border-radius:10px;max-width:100%;height:auto">' +
+          '<div style="font-family:Consolas,monospace;font-size:15px;letter-spacing:.04em;color:#221c35">' + escapeHtml(codes[i]) + '</div>' +
+        '</div>'
+      );
+      continue;
+    }
     attachments.push({ filename: 'entrada-' + codes[i] + '.png', content: png, cid, contentType: 'image/png' });
     blocks.push(
       '<div style="display:inline-block;margin:8px;padding:12px;border:1px solid #ddd6ee;border-radius:14px;text-align:center;background:#fff">' +
