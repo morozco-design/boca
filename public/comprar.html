@@ -18,6 +18,7 @@
   .buy-total strong { font-family: var(--font-display); font-size: 1.3rem; }
   .buy-note { font-size: 0.78rem; color: var(--ink-soft); margin: 12px 0 0; text-align: center; line-height: 1.5; }
   .btn-pay { width: 100%; }
+  .buy-spam { margin-top: 8px; padding: 10px 12px; background: var(--paper, #f5f2fc); border-radius: 10px; color: var(--ink, #221c35); }
 </style>
 </head>
 <body>
@@ -61,6 +62,7 @@
       <div class="buy-total"><span>Total</span><strong id="total-line"></strong></div>
       <button class="btn btn-pay" id="btn-pay" type="submit">Pagar con Mercado Pago</button>
       <p class="buy-note" id="reserve-note"></p>
+      <p class="buy-note buy-spam">Si las entradas no te llegan al mail, por favor revisá tu carpeta de <strong>spam</strong> o correo no deseado.</p>
     </form>
   </div>
 </div>
