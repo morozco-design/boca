@@ -287,7 +287,7 @@ En Netlify → *Site configuration → Environment variables*:
 | `GMAIL_APP_PASSWORD` | Contraseña de aplicación de esa cuenta (ver abajo). |
 | `ADMIN_PASSCODE` | **Contraseña del panel.** Se administra solo acá: para cambiarla editá la variable y hacé un redeploy; para quitarla, borrala. Imprescindible antes de abrir la venta. |
 | `SALE_OPEN` | Opcional: `false` cierra la venta sin borrar nada. |
-| `MAX_PER_ORDER`, `RESERVE_MINUTES` | Opcionales: máximo de entradas por compra (8) y minutos de reserva (15). No hay límite por persona. |
+| `MAX_PER_EMAIL`, `MAX_PER_ORDER`, `RESERVE_MINUTES` | Opcionales: máximo de entradas por mail sumando todas sus compras (5), máximo por compra (8) y minutos de reserva (15). |
 | `MP_STATEMENT_DESCRIPTOR` | Opcional: texto que figura en el resumen de la tarjeta del comprador (máx. 16 caracteres, por defecto "CORO RODAL"). |
 | `MAIL_FROM_NAME` | Opcional: nombre del remitente en el mail (por defecto "Coro Rodal"). |
 

@@ -26,7 +26,7 @@
   }
 
   function maxQty(ev) {
-    return Math.max(1, Math.min(info.max, ev.available));
+    return Math.max(1, Math.min(info.max, info.maxPerEmail || info.max, ev.available));
   }
 
   function updateTotal() {
@@ -57,7 +57,7 @@
       ? 'Quedan ' + ev.available + ' entradas'
       : 'Entradas disponibles';
 
-    // Hasta 8 por compra (o las que queden).
+    // Hasta el tope por compra y por mail (o las que queden).
     var qtyInput = $('buyer-qty');
     var prev = parseInt(qtyInput.value, 10) || 1;
     qtyInput.innerHTML = '';
@@ -75,6 +75,7 @@
     if (!info || !info.open) { show('closed-card', true); return; }
     if (info.events.every(function (e) { return e.soldOut; })) { show('soldout-card', true); return; }
 
+    if (info.maxPerEmail) $('qty-note').textContent = 'Máximo ' + info.maxPerEmail + ' entradas por mail.';
     $('price-line').textContent = 'Acceso General · ' + money(info.price);
     $('reserve-note').textContent = 'Se reservan unos minutos mientras pagás. Al terminar te mandamos las entradas por mail.';
 

@@ -53,6 +53,9 @@ function makeStore() {
       data.set(key, { value, etag, metadata: opts.metadata || {} });
       return { etag };
     },
+    async list() {
+      return { blobs: Array.from(data.keys()).map((key) => ({ key })) };
+    },
     async delete(key) {
       await jitter();
       data.delete(key);

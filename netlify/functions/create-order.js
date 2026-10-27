@@ -11,7 +11,7 @@ const {
   randomId,
 } = require('./_lib/store');
 const { reserveTickets, releaseOrder, countAvailable, resolveSaleEvent } = require('./_lib/reservations');
-const { createOrder, updateOrder } = require('./_lib/orders');
+const { createOrder, updateOrder, claimBuyerQuota, releaseBuyerQuota, QuotaExceeded } = require('./_lib/orders');
 const mp = require('./_lib/mp');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -47,10 +47,29 @@ exports.handler = async (event) => {
   const orderId = randomId();
   const site = siteUrl(event);
   let ticketsReserved = false;
+  let quotaClaimed = false;
   let eventName = '';
   let saleEventId = null;
 
   try {
+    // Tope por mail (suma de todas sus compras, incluidas las que está pagando).
+    try {
+      await claimBuyerQuota(email, orderId, quantity, untilMs, cfg.maxPerEmail, nowMs);
+      quotaClaimed = true;
+    } catch (qerr) {
+      if (qerr instanceof QuotaExceeded) {
+        return json(409, {
+          ok: false,
+          error: 'quota_exceeded',
+          remaining: qerr.remaining,
+          message: qerr.remaining > 0
+            ? 'El máximo es ' + cfg.maxPerEmail + ' entradas por mail. Con este mail podés comprar ' + qerr.remaining + (qerr.remaining === 1 ? ' más.' : ' más.')
+            : 'Con este mail ya alcanzaste el máximo de ' + cfg.maxPerEmail + ' entradas.',
+        });
+      }
+      throw qerr;
+    }
+
     // Apartar las entradas.
     let codes = null;
     let availableNow = 0;
@@ -68,6 +87,10 @@ exports.handler = async (event) => {
         return state;
       });
     } catch (err) {
+      if (err instanceof MutationRejected && (err.code === 'event_not_found' || err.code === 'sold_out')) {
+        await releaseBuyerQuota(email, orderId).catch(() => {});
+        quotaClaimed = false;
+      }
       if (err instanceof MutationRejected && err.code === 'event_not_found') {
         return json(409, { ok: false, error: 'event_not_found', message: 'Ese evento ya no está a la venta.' });
       }
@@ -134,6 +157,7 @@ exports.handler = async (event) => {
     return json(200, { ok: true, orderId, checkoutUrl, reservedUntil: untilIso });
   } catch (err) {
     // Si algo falló después de apartar las entradas, se devuelven al pool.
+    if (quotaClaimed) await releaseBuyerQuota(email, orderId).catch(() => {});
     try {
       if (ticketsReserved) {
         await updateState((state) => {

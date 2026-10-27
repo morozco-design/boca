@@ -2,7 +2,7 @@
 
 const mp = require('./mp');
 const { sendTicketsEmail } = require('./mailer');
-const { getOrder, updateOrder } = require('./orders');
+const { getOrder, updateOrder, markBuyerPaid } = require('./orders');
 const { updateState, readState, MutationRejected, findEvent, getImageBlobStore } = require('./store');
 const { releaseExpired } = require('./reservations');
 
@@ -108,6 +108,7 @@ async function processPayment(paymentId, opts) {
       return o;
     });
     order = updated.value || order;
+    await markBuyerPaid(order.email, order.id, order.quantity).catch((e) => console.error('[compras] cupo por mail:', e && e.message));
   }
 
   const emailError = await ensureEmail(order.id, options.siteUrl);

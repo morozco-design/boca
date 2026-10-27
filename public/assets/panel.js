@@ -1315,6 +1315,40 @@
     showLogin('');
   });
 
+  // ---- Respaldo ----
+  function downloadBackup(format, btn) {
+    var headers = {};
+    var passcode = readPasscode();
+    if (passcode) headers['x-admin-passcode'] = passcode;
+    var label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Preparando…';
+    fetch('/.netlify/functions/backup' + (format === 'csv' ? '?format=csv' : ''), { headers: headers })
+      .then(function (res) {
+        if (res.status === 401) { storePasscode(''); showLogin('La contraseña ya no es válida. Ingresala de nuevo.'); throw new Error('auth'); }
+        if (!res.ok) throw new Error('http_' + res.status);
+        var cd = res.headers.get('Content-Disposition') || '';
+        var m = cd.match(/filename="([^"]+)"/);
+        var name = m ? m[1] : (format === 'csv' ? 'entradas.csv' : 'respaldo-entradas.json');
+        return res.blob().then(function (blob) { return { blob: blob, name: name }; });
+      })
+      .then(function (r) {
+        var url = URL.createObjectURL(r.blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = r.name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+        toast('Respaldo descargado.');
+      })
+      .catch(function (e) { if (!e || e.message !== 'auth') toast('No se pudo descargar el respaldo.'); })
+      .finally(function () { btn.disabled = false; btn.textContent = label; });
+  }
+  document.getElementById('btn-backup-json').addEventListener('click', function () { downloadBackup('json', this); });
+  document.getElementById('btn-backup-csv').addEventListener('click', function () { downloadBackup('csv', this); });
+
   // ---- Boot ----
   fetch('/.netlify/functions/admin-auth').then(function (res) { return res.json(); }).then(function (info) {
     if (!info || !info.ok) throw new Error('auth');

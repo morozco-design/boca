@@ -36,6 +36,7 @@ exports.handler = async (event) => {
       price: cfg.price,
       currency: cfg.currency,
       max: cfg.max,
+      maxPerEmail: cfg.maxPerEmail,
       events,
     });
   } catch (err) {

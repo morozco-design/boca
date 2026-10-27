@@ -48,6 +48,8 @@ process.env.GMAIL_APP_PASSWORD = 'abcd efgh ijkl mnop';
 process.env.SITE_URL = 'https://mi-sitio.netlify.app';
 delete process.env.MP_WEBHOOK_SECRET;
 delete process.env.ADMIN_PASSCODE;
+// Las pruebas generales no usan el tope por mail; tiene su propia prueba.
+process.env.MAX_PER_EMAIL = '1000';
 
 const fn = (name) => require('../netlify/functions/' + name + '.js').handler;
 const generate = fn('generate');
@@ -60,6 +62,7 @@ const validate = fn('validate');
 const editEvent = fn('edit-event');
 const adminAuth = fn('admin-auth');
 const eventImage = fn('event-image');
+const backup = fn('backup');
 
 let pass = 0;
 let fail = 0;
@@ -604,6 +607,75 @@ async function main() {
     assert.ok(mail.codes === undefined);
     const code = qr.data.slice(3);
     assert.ok(jpgs[0].filename.includes(code));
+  });
+
+  await test('respaldo: JSON con eventos, entradas y pedidos; CSV con una fila por entrada; exige contraseña', async () => {
+    const j = await call(backup, 'GET');
+    assert.strictEqual(j.status, 200);
+    assert.ok(j.data.events.length >= 3);
+    assert.ok(j.data.orders.length >= 3);
+    assert.ok(j.data.events.every((e) => Array.isArray(e.tickets)));
+    const raw = await backup({ httpMethod: 'GET', headers: {}, queryStringParameters: { format: 'csv' } });
+    assert.strictEqual(raw.statusCode, 200);
+    assert.ok(/text\/csv/.test(raw.headers['Content-Type']));
+    const lines = raw.body.trim().split(/\r?\n/);
+    const total = j.data.events.reduce((n, e) => n + e.tickets.length, 0);
+    assert.strictEqual(lines.length, total + 1);
+    assert.ok(lines[0].includes('mail_comprador'));
+    assert.ok(raw.body.includes('ana@example.com'));
+    process.env.ADMIN_PASSCODE = 'x-clave';
+    assert.strictEqual((await call(backup, 'GET')).status, 401);
+    assert.strictEqual((await call(backup, 'GET', { headers: { 'x-admin-passcode': 'x-clave' } })).status, 200);
+    delete process.env.ADMIN_PASSCODE;
+  });
+
+  await test('tope de 5 entradas por mail: suma compras, mayúsculas no engañan y se libera si no se paga', async () => {
+    process.env.MAX_PER_EMAIL = '5';
+    try {
+      const eid = await newEvent('Tope por mail', 30);
+      setEvent(eid);
+      const info = (await call(saleInfo, 'GET')).data;
+      assert.strictEqual(info.maxPerEmail, 5);
+      const mk = (email, q) => call(createOrder, 'POST', { body: buyer({ name: 'Tope', email, quantity: q }) });
+      // 6 de una vez: no.
+      const six = await mk('tope@example.com', 6);
+      assert.strictEqual(six.status, 409);
+      assert.strictEqual(six.data.error, 'quota_exceeded');
+      // 3 y luego 3 con el mismo mail (otra forma de escribirlo): la segunda no pasa, 2 sí.
+      const a = await mk('tope@example.com', 3);
+      assert.strictEqual(a.status, 200, JSON.stringify(a.data));
+      const b = await mk('TOPE@Example.com', 3);
+      assert.strictEqual(b.status, 409);
+      assert.strictEqual(b.data.remaining, 2);
+      const c = await mk('tope@example.com', 2);
+      assert.strictEqual(c.status, 200);
+      // Ya está en el máximo.
+      const d = await mk('tope@example.com', 1);
+      assert.strictEqual(d.status, 409);
+      assert.strictEqual(d.data.remaining, 0);
+      // Otro mail no se ve afectado.
+      assert.strictEqual((await mk('otro-tope@example.com', 5)).status, 200);
+      // Compras simultáneas con el mismo mail: no se pasan del tope.
+      const race = await Promise.all([1, 2, 3, 4].map(() => mk('carrera@example.com', 2)));
+      assert.strictEqual(race.filter((x) => x.status === 200).length, 2);
+      // Si el pedido pagado cuenta: se paga a y sigue contando; las reservas vencidas liberan cupo.
+      approvePayment('9401', a.data.orderId, 450 * 3);
+      await hook(9401);
+      assert.strictEqual((await mk('tope@example.com', 1)).status, 409);
+      // Falla de Mercado Pago: el cupo vuelve.
+      mpState.failPreferences = true;
+      const f = await mk('falla@example.com', 5);
+      assert.strictEqual(f.status, 502);
+      mpState.failPreferences = false;
+      assert.strictEqual((await mk('falla@example.com', 5)).status, 200);
+      // Sin stock: tampoco consume cupo.
+      const small = await newEvent('Chico', 2);
+      setEvent(small);
+      assert.strictEqual((await mk('stock@example.com', 4)).status, 409);
+      assert.strictEqual((await mk('stock@example.com', 2)).status, 200);
+    } finally {
+      process.env.MAX_PER_EMAIL = '1000';
+    }
   });
 
   console.log('\n' + pass + ' pasaron, ' + fail + ' fallaron');

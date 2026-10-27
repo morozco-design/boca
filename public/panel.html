@@ -104,6 +104,15 @@
     <p class="hint" id="empty-pool-hint" hidden>Todavía no generaste ningún código.</p>
   </div>
 
+  <div class="card" id="backup-card">
+    <h2>Respaldo</h2>
+    <p class="hint hint-left">Descargá una copia de todos los eventos, entradas (con su estado) y pedidos online. Conviene hacerlo antes y después de cada función. Las imágenes de los eventos no se incluyen: guardá tus originales.</p>
+    <div class="action-row">
+      <button class="btn btn-secondary btn-small" id="btn-backup-json" type="button">Descargar respaldo</button>
+      <button class="btn btn-secondary btn-small" id="btn-backup-csv" type="button">Descargar planilla (Excel)</button>
+    </div>
+  </div>
+
   <div class="card" id="security-card" hidden>
     <h2>Acceso al panel</h2>
     <p class="hint hint-left">El panel está protegido con contraseña. Se administra en Netlify, con la variable ADMIN_PASSCODE.</p>
