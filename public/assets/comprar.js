@@ -70,8 +70,42 @@
     updateTotal();
   }
 
+  // ---- Cuenta regresiva hasta la apertura de la venta ----
+  var countdownTimer = null;
+  var serverOffset = 0; // hora del servidor menos la del dispositivo
+
+  function two(n) { return n < 10 ? '0' + n : String(n); }
+
+  function startCountdown() {
+    var target = Date.parse(info.opensAt);
+    serverOffset = (info.now || Date.now()) - Date.now();
+    document.title = 'Entradas — la venta abre pronto';
+    $('countdown-when').textContent = 'Abre el ' + new Date(target).toLocaleString('es-UY', {
+      timeZone: 'America/Montevideo', weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', hour12: false,
+    }) + ' h';
+    show('countdown-card', true);
+    function tick() {
+      var left = Math.max(0, target - (Date.now() + serverOffset));
+      var s = Math.floor(left / 1000);
+      $('cd-d').textContent = String(Math.floor(s / 86400));
+      $('cd-h').textContent = two(Math.floor((s % 86400) / 3600));
+      $('cd-m').textContent = two(Math.floor((s % 3600) / 60));
+      $('cd-s').textContent = two(s % 60);
+      if (left <= 0) {
+        clearInterval(countdownTimer);
+        countdownTimer = null;
+        // Llegó la hora: se vuelve a pedir la página de venta (con una pequeña
+        // espera al azar para no juntar a todo el mundo en el mismo instante).
+        setTimeout(function () { show('countdown-card', false); show('loading-card', true); load(false); }, Math.floor(Math.random() * 1500) + 300);
+      }
+    }
+    tick();
+    if (!countdownTimer) countdownTimer = setInterval(tick, 1000);
+  }
+
   function render() {
     show('loading-card', false);
+    if (info && info.scheduled) { startCountdown(); return; }
     if (!info || !info.open) { show('closed-card', true); return; }
     if (info.events.every(function (e) { return e.soldOut; })) { show('soldout-card', true); return; }
 
@@ -153,6 +187,7 @@
         if (data && data.debug && /[?&]debug=1/.test(window.location.search)) msg += ' [detalle: ' + JSON.stringify(data.debug) + ']';
         banner(msg);
         if (data && (data.error === 'sold_out' || data.error === 'event_not_found')) load(true);
+        if (data && data.error === 'not_open_yet') { show('buy-card', false); show('loading-card', true); load(false); }
         btn.disabled = false;
         btn.textContent = 'Pagar con Mercado Pago';
       })

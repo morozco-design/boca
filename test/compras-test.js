@@ -63,6 +63,7 @@ const editEvent = fn('edit-event');
 const adminAuth = fn('admin-auth');
 const eventImage = fn('event-image');
 const backup = fn('backup');
+const saleSettings = fn('sale-settings');
 
 let pass = 0;
 let fail = 0;
@@ -130,7 +131,9 @@ async function main() {
     assert.strictEqual(r.data.events.length, 1);
     assert.strictEqual(r.data.events[0].name, 'Fiesta BOCA');
     assert.strictEqual(r.data.events[0].available, 10);
-    assert.ok(!JSON.stringify(r.data).match(/[A-Z0-9]{4}-[A-Z0-9]{4}/), 'no debe filtrar códigos');
+    const raw = JSON.stringify(r.data);
+    // (se compara con los códigos reales: un patrón genérico daba falsos positivos con ids numéricos)
+    (await eventTickets(eventId)).forEach((t) => assert.ok(!raw.includes(t.code), 'no debe filtrar códigos'));
   });
 
   await test('SALE_OPEN=false cierra la venta (sale-info y create-order)', async () => {
@@ -676,6 +679,39 @@ async function main() {
     } finally {
       process.env.MAX_PER_EMAIL = '1000';
     }
+  });
+
+  await test('apertura programada: antes de la hora solo cuenta regresiva y no se puede comprar; después abre; exige contraseña', async () => {
+    const eid = await newEvent('Programado', 5);
+    setEvent(eid);
+    const future = new Date(Date.now() + 3600 * 1000).toISOString();
+    const set = await call(saleSettings, 'POST', { body: { opensAt: future } });
+    assert.strictEqual(set.status, 200, JSON.stringify(set.data));
+    assert.strictEqual((await call(saleSettings, 'GET')).data.opensAt, future);
+    const info = (await call(saleInfo, 'GET')).data;
+    assert.strictEqual(info.scheduled, true);
+    assert.strictEqual(info.open, false);
+    assert.strictEqual(info.opensAt, future);
+    assert.ok(typeof info.now === 'number');
+    assert.strictEqual(info.events, undefined, 'no lista eventos antes de abrir');
+    const no = await call(createOrder, 'POST', { body: buyer({ email: 'temprano@example.com', quantity: 1 }) });
+    assert.strictEqual(no.status, 409);
+    assert.strictEqual(no.data.error, 'not_open_yet');
+    // Fecha ya pasada: abierta.
+    await call(saleSettings, 'POST', { body: { opensAt: new Date(Date.now() - 1000).toISOString() } });
+    const open = (await call(saleInfo, 'GET')).data;
+    assert.strictEqual(open.open, true);
+    assert.ok(open.events.length > 0);
+    assert.strictEqual((await call(createOrder, 'POST', { body: buyer({ email: 'a-tiempo@example.com', quantity: 1 }) })).status, 200);
+    // Fecha inválida y contraseña.
+    assert.strictEqual((await call(saleSettings, 'POST', { body: { opensAt: 'mañana' } })).status, 400);
+    process.env.ADMIN_PASSCODE = 'clave-ap';
+    assert.strictEqual((await call(saleSettings, 'POST', { body: { opensAt: future } })).status, 401);
+    assert.strictEqual((await call(saleSettings, 'GET')).status, 401);
+    delete process.env.ADMIN_PASSCODE;
+    // Quitar la fecha: abierta sin más.
+    assert.strictEqual((await call(saleSettings, 'POST', { body: { opensAt: null } })).data.opensAt, null);
+    assert.strictEqual((await call(saleInfo, 'GET')).data.open, true);
   });
 
   console.log('\n' + pass + ' pasaron, ' + fail + ' fallaron');

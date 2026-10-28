@@ -3,6 +3,7 @@
 const { json, noContent, CORS_HEADERS } = require('./_lib/http');
 const { isAdminAuthorized } = require('./_lib/auth');
 const { readState, initFromEvent, blobsDebugInfo, getOrdersStore } = require('./_lib/store');
+const { getSaleSettings } = require('./_lib/settings');
 
 // SOLO ADMIN. Devuelve una copia de todo lo importante para guardar:
 //   GET            -> JSON con eventos, entradas (con su estado) y pedidos online.
@@ -65,7 +66,7 @@ exports.handler = async (event) => {
       };
     }
 
-    const payload = { ok: true, app: 'pase-unico', version: 1, exportedAt: stamp, events: state.events || [], orders };
+    const payload = { ok: true, app: 'pase-unico', version: 1, exportedAt: stamp, settings: await getSaleSettings(), events: state.events || [], orders };
     return {
       statusCode: 200,
       headers: Object.assign({

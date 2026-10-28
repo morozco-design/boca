@@ -13,6 +13,7 @@ const {
 const { reserveTickets, releaseOrder, countAvailable, resolveSaleEvent } = require('./_lib/reservations');
 const { createOrder, updateOrder, claimBuyerQuota, releaseBuyerQuota, QuotaExceeded } = require('./_lib/orders');
 const mp = require('./_lib/mp');
+const { getSaleSettings } = require('./_lib/settings');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -26,6 +27,11 @@ exports.handler = async (event) => {
 
   const cfg = saleConfig();
   if (!cfg.open) return json(409, { ok: false, error: 'sale_closed', message: 'La venta no está abierta.' });
+
+  const { opensAt } = await getSaleSettings();
+  if (opensAt && Date.parse(opensAt) > Date.now()) {
+    return json(409, { ok: false, error: 'not_open_yet', opensAt, message: 'La venta todavía no está abierta.' });
+  }
 
   const body = parseBody(event);
   if (!body) return json(400, { ok: false, error: 'invalid_json' });

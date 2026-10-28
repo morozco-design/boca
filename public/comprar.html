@@ -18,6 +18,10 @@
   .buy-total strong { font-family: var(--font-display); font-size: 1.3rem; }
   .buy-note { font-size: 0.78rem; color: var(--ink-soft); margin: 12px 0 0; text-align: center; line-height: 1.5; }
   .btn-pay { width: 100%; }
+  .cd-row { display: flex; gap: 8px; justify-content: center; }
+  .cd-box { flex: 1; max-width: 80px; background: var(--paper, #f5f2fc); border-radius: 12px; padding: 12px 4px; display: flex; flex-direction: column; align-items: center; }
+  .cd-n { font-family: var(--font-display); font-size: 1.9rem; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .cd-l { font-size: 0.72rem; color: var(--ink-soft); margin-top: 2px; text-transform: uppercase; letter-spacing: .04em; }
   .buy-spam { margin-top: 12px; padding: 14px 16px; background: var(--paper, #f5f2fc); border-radius: 12px; color: var(--ink, #221c35); font-size: 1rem; line-height: 1.5; }
 </style>
 </head>
@@ -31,6 +35,18 @@
   <div id="banner" class="banner banner-warn" hidden></div>
 
   <div class="card" id="loading-card"><p class="hint">Cargando…</p></div>
+
+  <div class="card" id="countdown-card" hidden style="text-align:center">
+    <h2>La venta abre pronto</h2>
+    <p class="hint" id="countdown-when" style="margin:0 0 14px"></p>
+    <div class="cd-row" id="countdown" role="timer" aria-live="off">
+      <div class="cd-box"><span class="cd-n" id="cd-d">0</span><span class="cd-l">días</span></div>
+      <div class="cd-box"><span class="cd-n" id="cd-h">00</span><span class="cd-l">horas</span></div>
+      <div class="cd-box"><span class="cd-n" id="cd-m">00</span><span class="cd-l">min</span></div>
+      <div class="cd-box"><span class="cd-n" id="cd-s">00</span><span class="cd-l">seg</span></div>
+    </div>
+    <p class="hint" style="margin:14px 0 0">No hace falta recargar la página: cuando llegue la hora se habilita sola.</p>
+  </div>
 
   <div class="card" id="closed-card" hidden>
     <h2>La venta no está abierta</h2>

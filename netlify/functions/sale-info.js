@@ -4,6 +4,7 @@ const { json, noContent } = require('./_lib/http');
 const { saleConfig } = require('./_lib/config');
 const { readState, initFromEvent, blobsDebugInfo } = require('./_lib/store');
 const { countAvailable } = require('./_lib/reservations');
+const { getSaleSettings } = require('./_lib/settings');
 
 // PÚBLICO. Lo que necesita la página de compra: los eventos creados en el
 // panel (con entradas generadas), cuántas quedan de cada uno, el precio fijo
@@ -17,6 +18,12 @@ exports.handler = async (event) => {
   if (!cfg.open) return json(200, { ok: true, open: false });
 
   try {
+    // Venta programada: hasta la hora de apertura solo se informa cuándo abre.
+    const { opensAt } = await getSaleSettings();
+    const now = Date.now();
+    if (opensAt && Date.parse(opensAt) > now) {
+      return json(200, { ok: true, open: false, scheduled: true, opensAt, now });
+    }
     const { state } = await readState();
     const nowMs = Date.now();
     // Orden en la venta: primero los que tienen posición (de menor a mayor);
@@ -35,6 +42,7 @@ exports.handler = async (event) => {
       open: events.length > 0,
       price: cfg.price,
       currency: cfg.currency,
+      now,
       max: cfg.max,
       maxPerEmail: cfg.maxPerEmail,
       events,

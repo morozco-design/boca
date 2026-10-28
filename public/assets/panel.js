@@ -1281,6 +1281,7 @@
     panelView.hidden = false;
     renderSecurity(info);
     loadEvents();
+    loadSaleOpens();
   }
 
   function tryLogin(pass) {
@@ -1313,6 +1314,49 @@
   btnLogout.addEventListener('click', function () {
     storePasscode('');
     showLogin('');
+  });
+
+  // ---- Apertura programada de la venta ----
+  var saleOpensStatus = document.getElementById('sale-open-status');
+  var inputSaleOpens = document.getElementById('input-sale-opens');
+  var UY_OFFSET_MS = 3 * 3600 * 1000; // Uruguay: UTC-3 todo el año
+
+  function isoToUyInput(iso) {
+    return new Date(Date.parse(iso) - UY_OFFSET_MS).toISOString().slice(0, 16);
+  }
+  function uyInputToIso(v) {
+    var t = Date.parse(v + ':00-03:00');
+    return isFinite(t) ? new Date(t).toISOString() : null;
+  }
+  function renderSaleOpens(data) {
+    if (data.opensAt) {
+      var when = new Date(data.opensAt).toLocaleString('es-UY', { timeZone: 'America/Montevideo', weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', hour12: false });
+      var future = Date.parse(data.opensAt) > Date.now();
+      saleOpensStatus.textContent = future
+        ? 'La venta abre el ' + when + ' h. Hasta entonces la página de compra muestra una cuenta regresiva y no se puede comprar.'
+        : 'La venta se habilitó el ' + when + ' h y está abierta.';
+      inputSaleOpens.value = isoToUyInput(data.opensAt);
+    } else {
+      saleOpensStatus.textContent = 'Sin fecha de apertura: la venta online está abierta.';
+      inputSaleOpens.value = '';
+    }
+  }
+  function loadSaleOpens() {
+    api('sale-settings', 'GET').then(function (r) { if (r.data && r.data.ok) renderSaleOpens(r.data); });
+  }
+  function saveSaleOpens(iso) {
+    api('sale-settings', 'POST', { opensAt: iso }).then(function (r) {
+      if (r.data && r.data.ok) { renderSaleOpens(r.data); toast(iso ? 'Apertura programada.' : 'Venta abierta, sin fecha.'); }
+      else if (r.status !== 401) toast((r.data && r.data.message) || 'No se pudo guardar.');
+    }).catch(function () { toast('Sin conexión con el servidor.'); });
+  }
+  document.getElementById('btn-sale-opens-save').addEventListener('click', function () {
+    var iso = inputSaleOpens.value ? uyInputToIso(inputSaleOpens.value) : null;
+    if (!iso) { toast('Elegí una fecha y hora.'); return; }
+    saveSaleOpens(iso);
+  });
+  document.getElementById('btn-sale-opens-clear').addEventListener('click', function () {
+    showConfirm('Abrir la venta ya', 'Se quita la fecha de apertura y la venta queda abierta de inmediato. ¿Confirmás?', function () { saveSaleOpens(null); });
   });
 
   // ---- Respaldo ----

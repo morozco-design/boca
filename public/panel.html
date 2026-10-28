@@ -104,6 +104,17 @@
     <p class="hint" id="empty-pool-hint" hidden>Todavía no generaste ningún código.</p>
   </div>
 
+  <div class="card" id="sale-open-card">
+    <h2>Apertura de la venta online</h2>
+    <p class="hint hint-left" id="sale-open-status"></p>
+    <label for="input-sale-opens">Fecha y hora de apertura (hora de Uruguay)</label>
+    <input type="datetime-local" id="input-sale-opens">
+    <div class="action-row">
+      <button class="btn btn-secondary btn-small" id="btn-sale-opens-save" type="button">Guardar</button>
+      <button class="btn btn-secondary btn-small" id="btn-sale-opens-clear" type="button">Abrir ya (sin fecha)</button>
+    </div>
+  </div>
+
   <div class="card" id="backup-card">
     <h2>Respaldo</h2>
     <p class="hint hint-left">Descargá una copia de todos los eventos, entradas (con su estado) y pedidos online. Conviene hacerlo antes y después de cada función. Las imágenes de los eventos no se incluyen: guardá tus originales.</p>
