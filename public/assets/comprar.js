@@ -53,9 +53,9 @@
       hero.removeAttribute('src');
     }
 
-    $('available-line').textContent = ev.available <= 20
-      ? 'Quedan ' + ev.available + ' entradas'
-      : 'Entradas disponibles';
+    $('available-line').textContent = ev.available === 1
+      ? 'Queda 1 entrada disponible'
+      : 'Entradas disponibles: ' + ev.available;
 
     // Hasta el tope por compra y por mail (o las que queden).
     var qtyInput = $('buyer-qty');
