@@ -5,6 +5,12 @@ const { updateState, MutationRejected, initFromEvent, blobsDebugInfo } = require
 
 const QR_PREFIX = 'PU:';
 
+// "Hoy" en Uruguay (UTC-3). La jornada cambia a las 5 de la mañana, para que
+// una función que termina pasada la medianoche siga valiendo para su fecha.
+function today() {
+  return new Date(Date.now() - 8 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
 function normalizeCode(raw) {
   if (typeof raw !== 'string') return '';
   let code = raw.trim().toUpperCase();
@@ -50,13 +56,18 @@ exports.handler = async (event) => {
         outcome = { ok: false, reason: 'not_found' };
         throw new MutationRejected('not_found');
       }
-      if (ticket.status === 'usado') {
-        outcome = Object.assign({ ok: false, reason: 'already_used', usedAt: ticket.usedAt }, counts(ticketEvent));
-        throw new MutationRejected('already_used');
-      }
       if (ticket.status === 'disponible' || ticket.status === 'reservado') {
         outcome = Object.assign({ ok: false, reason: 'not_issued' }, counts(ticketEvent));
         throw new MutationRejected('not_issued');
+      }
+      // Si el evento tiene fecha, la entrada solo vale ese día.
+      if (ticketEvent.eventDate && ticketEvent.eventDate !== today()) {
+        outcome = Object.assign({ ok: false, reason: 'wrong_date', eventDate: ticketEvent.eventDate, today: today() }, counts(ticketEvent));
+        throw new MutationRejected('wrong_date');
+      }
+      if (ticket.status === 'usado') {
+        outcome = Object.assign({ ok: false, reason: 'already_used', usedAt: ticket.usedAt }, counts(ticketEvent));
+        throw new MutationRejected('already_used');
       }
 
       // status === 'emitido' -> valid first entry, mark it used now.
@@ -72,6 +83,6 @@ exports.handler = async (event) => {
     // else: outcome was already set above before the throw, fall through.
   }
 
-  const statusCode = outcome.ok ? 200 : outcome.reason === 'already_used' ? 409 : 404;
+  const statusCode = outcome.ok ? 200 : (outcome.reason === 'already_used' || outcome.reason === 'wrong_date') ? 409 : 404;
   return json(statusCode, outcome);
 };

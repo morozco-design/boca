@@ -200,6 +200,10 @@
         } else if (data.reason === 'already_used') {
           beep(220, 260);
           showResult('error', 'Código ya utilizado', 'Este pase ya ingresó antes.', data);
+        } else if (data.reason === 'wrong_date') {
+          beep(220, 260);
+          var d = data.eventDate ? data.eventDate.split('-').reverse().join('/') : '';
+          showResult('error', 'Fecha incorrecta', d ? 'Esta entrada es para el ' + d + ', no para hoy.' : 'Esta entrada no es para hoy.', data);
         } else if (data.reason === 'not_issued') {
           beep(220, 260);
           showResult('error', 'Código no entregado', 'Este código todavía no fue entregado a nadie.', data);

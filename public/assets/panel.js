@@ -27,6 +27,7 @@
   var editCapacity = document.getElementById('edit-capacity');
   var editHint = document.getElementById('edit-hint');
   var editOrder = document.getElementById('edit-order');
+  var editDate = document.getElementById('edit-date');
   var securityCard = document.getElementById('security-card');
   var btnLogout = document.getElementById('btn-logout');
 
@@ -593,7 +594,8 @@
   // ---- Event picker ----
   function renderEventOptions() {
     var html = events.map(function (ev) {
-      var label = ev.name + ' — ' + ev.stats.disponible + ' disp. / ' + ev.stats.total + ' tot.';
+      var dt = ev.eventDate ? ' · ' + ev.eventDate.split('-').reverse().join('/') : '';
+      var label = ev.name + dt + ' — ' + ev.stats.disponible + ' disp. / ' + ev.stats.total + ' tot.';
       return '<option value="' + escapeHtml(ev.id) + '">' + escapeHtml(label) + '</option>';
     }).join('');
     html += '<option value="' + NEW_EVENT_VALUE + '">+ Nuevo evento…</option>';
@@ -1230,6 +1232,7 @@
     var locked = tickets.filter(function (t) { return t.status !== 'disponible'; }).length;
     editName.value = ev.name;
     editOrder.value = ev.saleOrder ? String(ev.saleOrder) : '';
+    editDate.value = ev.eventDate || '';
     editCapacity.value = String(tickets.length || (ev.stats && ev.stats.total) || 1);
     editCapacity.min = String(Math.max(1, locked));
     editHint.textContent = locked > 0
@@ -1246,7 +1249,7 @@
     var cap = parseInt(editCapacity.value, 10);
     if (!name) { toast('Poné un nombre para el evento.'); return; }
     if (!(cap >= 1)) { toast('Ingresá un aforo válido.'); return; }
-    api('edit-event', 'POST', { eventId: currentEventId, name: name, capacity: cap, saleOrder: editOrder.value.trim() === '' ? null : parseInt(editOrder.value, 10) }).then(function (result) {
+    api('edit-event', 'POST', { eventId: currentEventId, name: name, capacity: cap, saleOrder: editOrder.value.trim() === '' ? null : parseInt(editOrder.value, 10), eventDate: editDate.value || null }).then(function (result) {
       if (result.data && result.data.ok) {
         editModal.hidden = true;
         currentEvent = result.data.event;

@@ -106,6 +106,8 @@ function eventSummaries(state) {
     stats: statsFor(ev.tickets),
     hasImage: !!ev.hasImage,
     hasSaleImage: !!ev.hasSaleImage,
+    saleOrder: ev.saleOrder || null,
+    eventDate: ev.eventDate || null,
   }));
 }
 

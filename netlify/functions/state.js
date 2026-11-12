@@ -43,6 +43,7 @@ exports.handler = async (event) => {
         hasImage: !!ev.hasImage,
         hasSaleImage: !!ev.hasSaleImage,
         saleOrder: ev.saleOrder || null,
+        eventDate: ev.eventDate || null,
       };
     }
 

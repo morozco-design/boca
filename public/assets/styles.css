@@ -117,7 +117,7 @@ label {
   color: var(--ink-soft);
   margin-bottom: 6px;
 }
-input[type="text"], input[type="number"], input[type="password"], input[type="email"], select {
+input[type="text"], input[type="number"], input[type="password"], input[type="email"], input[type="date"], input[type="datetime-local"], select {
   width: 100%;
   font-family: var(--font-body);
   font-size: 1rem;

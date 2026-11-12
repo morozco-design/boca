@@ -731,6 +731,46 @@ async function main() {
     assert.strictEqual((await call(saleInfo, 'GET')).data.open, true);
   });
 
+  await test('fecha del evento: el escáner solo acepta entradas el día de la función (y no las marca como usadas otro día)', async () => {
+    const eid = await newEvent('Con fecha', 4);
+    setEvent(eid);
+    const bizDay = (offsetDays) => new Date(Date.now() - 8 * 3600e3 + offsetDays * 86400e3).toISOString().slice(0, 10);
+    const r = await call(createOrder, 'POST', { body: buyer({ name: 'Fecha', email: 'fecha@example.com', quantity: 2 }) });
+    assert.strictEqual(r.status, 200);
+    approvePayment('9501', r.data.orderId, 900);
+    await hook(9501);
+    const codes = (await call(orderStatus, 'GET', { query: { id: r.data.orderId } })).data.codes;
+    // Fecha inválida.
+    assert.strictEqual((await call(editEvent, 'POST', { body: { eventId: eid, eventDate: '2026-02-30' } })).status, 400);
+    assert.strictEqual((await call(editEvent, 'POST', { body: { eventId: eid, eventDate: 'mañana' } })).status, 400);
+    // Fecha de mañana: hoy se rechaza, con la fecha correcta, y la entrada sigue sin usar.
+    const set = await call(editEvent, 'POST', { body: { eventId: eid, eventDate: bizDay(1) } });
+    assert.strictEqual(set.status, 200);
+    assert.strictEqual(set.data.event.eventDate, bizDay(1));
+    assert.strictEqual(set.data.events.find((e) => e.id === eid).eventDate, bizDay(1));
+    const wrong = await call(validate, 'POST', { body: { code: 'PU:' + codes[0] } });
+    assert.strictEqual(wrong.status, 409);
+    assert.strictEqual(wrong.data.reason, 'wrong_date');
+    assert.strictEqual(wrong.data.eventDate, bizDay(1));
+    assert.strictEqual(wrong.data.used, 0);
+    // Fecha de ayer: también se rechaza.
+    await call(editEvent, 'POST', { body: { eventId: eid, eventDate: bizDay(-1) } });
+    assert.strictEqual((await call(validate, 'POST', { body: { code: codes[0] } })).data.reason, 'wrong_date');
+    // Fecha de hoy: entra, una sola vez.
+    await call(editEvent, 'POST', { body: { eventId: eid, eventDate: bizDay(0) } });
+    assert.strictEqual((await call(validate, 'POST', { body: { code: codes[0] } })).status, 200);
+    assert.strictEqual((await call(validate, 'POST', { body: { code: codes[0] } })).data.reason, 'already_used');
+    // Sin entregar + fecha equivocada: manda "no entregado".
+    const evFull = (await call(stateFn, 'GET', { query: { eventId: eid } })).data.event;
+    const free = evFull.tickets.find((t) => t.status === 'disponible');
+    await call(editEvent, 'POST', { body: { eventId: eid, eventDate: bizDay(5) } });
+    assert.strictEqual((await call(validate, 'POST', { body: { code: free.code } })).data.reason, 'not_issued');
+    // Sin fecha: sin control.
+    const clear = await call(editEvent, 'POST', { body: { eventId: eid, eventDate: null } });
+    assert.strictEqual(clear.data.event.eventDate, null);
+    assert.strictEqual((await call(validate, 'POST', { body: { code: codes[1] } })).status, 200);
+  });
+
   console.log('\n' + pass + ' pasaron, ' + fail + ' fallaron');
   process.exit(fail ? 1 : 0);
 }

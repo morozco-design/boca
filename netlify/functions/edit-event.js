@@ -51,7 +51,17 @@ exports.handler = async (event) => {
       return json(400, { ok: false, error: 'invalid_order', message: 'La posición tiene que ser un número entre 1 y 999.' });
     }
   }
-  if (!hasName && !hasCap && !hasOrder) return json(400, { ok: false, error: 'nothing_to_change' });
+  const hasDate = body.eventDate !== undefined;
+  let eventDate = null;
+  if (hasDate && body.eventDate !== null && body.eventDate !== '') {
+    const d = String(body.eventDate);
+    const t = /^\d{4}-\d{2}-\d{2}$/.test(d) ? Date.parse(d + 'T00:00:00Z') : NaN;
+    if (!Number.isFinite(t) || new Date(t).toISOString().slice(0, 10) !== d) {
+      return json(400, { ok: false, error: 'invalid_date', message: 'La fecha no es válida.' });
+    }
+    eventDate = d;
+  }
+  if (!hasName && !hasCap && !hasOrder && !hasDate) return json(400, { ok: false, error: 'nothing_to_change' });
 
   try {
     const nextState = await updateState((state) => {
@@ -59,6 +69,7 @@ exports.handler = async (event) => {
       if (!ev) throw new MutationRejected('event_not_found', 'Evento no encontrado.');
       if (hasName) ev.name = name;
       if (hasOrder) ev.saleOrder = saleOrder;
+      if (hasDate) ev.eventDate = eventDate;
 
       if (hasCap) {
         const tickets = ev.tickets || [];
@@ -94,7 +105,7 @@ exports.handler = async (event) => {
     const ev = findEvent(nextState, eventId);
     return json(200, {
       ok: true,
-      event: { id: ev.id, name: ev.name, createdAt: ev.createdAt, tickets: ev.tickets, stats: statsFor(ev.tickets), hasImage: !!ev.hasImage, hasSaleImage: !!ev.hasSaleImage, saleOrder: ev.saleOrder || null },
+      event: { id: ev.id, name: ev.name, createdAt: ev.createdAt, tickets: ev.tickets, stats: statsFor(ev.tickets), hasImage: !!ev.hasImage, hasSaleImage: !!ev.hasSaleImage, saleOrder: ev.saleOrder || null, eventDate: ev.eventDate || null },
       events: eventSummaries(nextState),
     });
   } catch (err) {
