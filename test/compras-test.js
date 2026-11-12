@@ -216,8 +216,25 @@ async function main() {
     const a = await call(validate, 'POST', { body: { code: 'PU:' + code } });
     assert.strictEqual(a.status, 200);
     assert.strictEqual(a.data.recipient, 'Ana Pérez');
+    // Contador de la puerta: usadas / aforo del evento ("1 de 10").
+    assert.strictEqual(a.data.used, 1);
+    assert.strictEqual(a.data.capacity, 10);
     const b = await call(validate, 'POST', { body: { code: 'PU:' + code } });
     assert.strictEqual(b.status, 409);
+    assert.strictEqual(b.data.used, 1);
+    assert.strictEqual(b.data.capacity, 10);
+    // Un código que no existe no revela nada.
+    const nf = await call(validate, 'POST', { body: { code: 'ZZZZ-ZZZZ' } });
+    assert.strictEqual(nf.status, 404);
+    assert.strictEqual(nf.data.used, undefined);
+    // Una entrada sin entregar muestra igual el contador.
+    const evs = (await call(stateFn, 'GET')).data.events;
+    const full = (await call(stateFn, 'GET', { query: { eventId: evs.find((e) => e.name === 'Fiesta BOCA').id } })).data.event;
+    const free = full.tickets.find((t) => t.status === 'disponible');
+    const ni = await call(validate, 'POST', { body: { code: free.code } });
+    assert.strictEqual(ni.data.reason, 'not_issued');
+    assert.strictEqual(ni.data.used, 1);
+    assert.strictEqual(ni.data.capacity, 10);
   });
 
   await test('tres avisos simultáneos del mismo pago: 1 solo mail y entradas sin duplicar', async () => {

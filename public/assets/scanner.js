@@ -15,6 +15,7 @@
   var resultIcon = document.getElementById('scan-result-icon');
   var resultHeadline = document.getElementById('scan-result-headline');
   var resultSub = document.getElementById('scan-result-sub');
+  var resultCount = document.getElementById('scan-result-count');
   var btnScanNext = document.getElementById('btn-scan-next');
 
   var scanning = false;
@@ -71,7 +72,7 @@
   // Full-screen pass/fail screen: green ('valid') for a successful scan,
   // red ('error') for any rejection. Pauses scanning until the operator
   // explicitly taps "Escanear siguiente".
-  function showResult(kind, headline, sub) {
+  function showResult(kind, headline, sub, data) {
     awaitingNext = true;
     statusBox.hidden = true;
     resultOverlay.hidden = false;
@@ -79,6 +80,14 @@
     resultIcon.textContent = kind === 'valid' ? '✓' : '✕';
     resultHeadline.textContent = headline;
     resultSub.textContent = sub || '';
+    // "3 de 192": entradas ya usadas sobre el aforo del evento.
+    if (data && typeof data.used === 'number' && typeof data.capacity === 'number') {
+      resultCount.textContent = data.used + ' de ' + data.capacity;
+      resultCount.hidden = false;
+    } else {
+      resultCount.textContent = '';
+      resultCount.hidden = true;
+    }
   }
 
   btnScanNext.addEventListener('click', function () {
@@ -187,13 +196,13 @@
         if (data.ok) {
           beep(880, 140);
           var sub = data.recipient ? 'A nombre de ' + data.recipient : code;
-          showResult('valid', 'Ingreso habilitado', sub);
+          showResult('valid', 'Ingreso habilitado', sub, data);
         } else if (data.reason === 'already_used') {
           beep(220, 260);
-          showResult('error', 'Código ya utilizado', 'Este pase ya ingresó antes.');
+          showResult('error', 'Código ya utilizado', 'Este pase ya ingresó antes.', data);
         } else if (data.reason === 'not_issued') {
           beep(220, 260);
-          showResult('error', 'Código no entregado', 'Este código todavía no fue entregado a nadie.');
+          showResult('error', 'Código no entregado', 'Este código todavía no fue entregado a nadie.', data);
         } else if (data.reason === 'not_found') {
           beep(220, 260);
           showResult('error', 'Código no reconocido', 'Este código no pertenece a este evento.');

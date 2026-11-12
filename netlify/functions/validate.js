@@ -30,14 +30,20 @@ exports.handler = async (event) => {
   if (!code) return json(400, { ok: false, error: 'missing_code' });
 
   let outcome = null;
+  // Cuántas entradas del evento ya se usaron y el aforo total (solo números).
+  const counts = (ev) => ({
+    used: (ev.tickets || []).filter((t) => t.status === 'usado').length,
+    capacity: (ev.tickets || []).length,
+  });
 
   try {
     await updateState((state) => {
       const events = state.events || [];
       let ticket = null;
+      let ticketEvent = null;
       for (const ev of events) {
         const t = (ev.tickets || []).find((tt) => tt.code === code);
-        if (t) { ticket = t; break; }
+        if (t) { ticket = t; ticketEvent = ev; break; }
       }
 
       if (!ticket) {
@@ -45,18 +51,18 @@ exports.handler = async (event) => {
         throw new MutationRejected('not_found');
       }
       if (ticket.status === 'usado') {
-        outcome = { ok: false, reason: 'already_used', usedAt: ticket.usedAt };
+        outcome = Object.assign({ ok: false, reason: 'already_used', usedAt: ticket.usedAt }, counts(ticketEvent));
         throw new MutationRejected('already_used');
       }
       if (ticket.status === 'disponible' || ticket.status === 'reservado') {
-        outcome = { ok: false, reason: 'not_issued' };
+        outcome = Object.assign({ ok: false, reason: 'not_issued' }, counts(ticketEvent));
         throw new MutationRejected('not_issued');
       }
 
       // status === 'emitido' -> valid first entry, mark it used now.
       ticket.status = 'usado';
       ticket.usedAt = new Date().toISOString();
-      outcome = { ok: true, recipient: ticket.recipient || null, usedAt: ticket.usedAt };
+      outcome = Object.assign({ ok: true, recipient: ticket.recipient || null, usedAt: ticket.usedAt }, counts(ticketEvent));
       return state;
     });
   } catch (err) {

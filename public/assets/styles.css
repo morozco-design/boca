@@ -356,6 +356,16 @@ select { appearance: auto; }
   opacity: 0.92;
   max-width: 320px;
 }
+.scan-result-count {
+  margin-top: 18px;
+  padding: 8px 20px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
 .scan-result-btn {
   width: auto;
   padding: 14px 30px;
